@@ -224,6 +224,14 @@ test('admin offers a manifest-backed bulk import for the prepared concept packag
   assert.match(admin, /בחרו את תיקיית חבילת הייבוא/);
 });
 
+test('admin can explicitly publish imported drafts after review', () => {
+  const admin = readFileSync(join(dist, 'admin/index.html'), 'utf8');
+  const adminScript = readFileSync(join(root, 'src/scripts/admin-app.ts'), 'utf8');
+
+  assert.match(admin, /data-publish-drafts/);
+  assert.match(adminScript, /publication_status.*published/);
+});
+
 test('draft content cannot leak into public output', () => {
   const output = walk(dist)
     .filter((path) => ['.html', '.xml', '.txt'].includes(extname(path)))

@@ -1,3 +1,4 @@
+import type { Session } from '@supabase/supabase-js';
 import { getSupabaseClient, isSupabaseConfigured } from '../lib/supabase-client';
 
 const app = document.querySelector<HTMLElement>('[data-admin-app]');
@@ -18,12 +19,12 @@ if (app) {
   const client = getSupabaseClient();
   const authRedirectUrl = new URL(`${import.meta.env.BASE_URL}admin/`, window.location.origin).toString();
 
-  async function showCurrentState() {
+  async function showCurrentState(initialSession?: Session | null) {
     if (!client) {
       configuration.hidden = false;
       return;
     }
-    const { data: { session } } = await client.auth.getSession();
+    const session = initialSession ?? (await client.auth.getSession()).data.session;
     if (!session) {
       authPanel.hidden = false;
       approvalPanel.hidden = true;
@@ -80,11 +81,13 @@ if (app) {
   });
 
   if (client) {
-    client.auth.onAuthStateChange(() => {
-      showCurrentState().catch((error) => {
-        authPanel.hidden = false;
-        authStatus.textContent = error instanceof Error ? error.message : 'לא ניתן לבדוק את מצב הכניסה.';
-      });
+    client.auth.onAuthStateChange((_event, session) => {
+      window.setTimeout(() => {
+        showCurrentState(session).catch((error) => {
+          authPanel.hidden = false;
+          authStatus.textContent = error instanceof Error ? error.message : 'לא ניתן לבדוק את מצב הכניסה.';
+        });
+      }, 0);
     });
   }
 
@@ -279,6 +282,36 @@ if (app) {
       bulkStatus.textContent = `הייבוא לא התחיל: ${error instanceof Error ? error.message : 'שגיאה לא ידועה.'}`;
     } finally {
       if (submitButton) submitButton.disabled = false;
+    }
+  });
+
+  const publishDraftsButton = required<HTMLButtonElement>('[data-publish-drafts]');
+  const publishDraftsStatus = required<HTMLElement>('[data-publish-drafts-status]');
+  publishDraftsButton.addEventListener('click', async () => {
+    if (!client) return;
+    publishDraftsButton.disabled = true;
+    publishDraftsStatus.textContent = 'מאתר טיוטות לפרסום…';
+    try {
+      const { data: drafts, error: draftsError } = await client
+        .from('concepts')
+        .select('id')
+        .eq('publication_status', 'draft');
+      if (draftsError) throw draftsError;
+      if (!drafts?.length) {
+        publishDraftsStatus.textContent = 'אין טיוטות לפרסום.';
+        return;
+      }
+      const { error } = await client
+        .from('concepts')
+        .update({ publication_status: 'published' })
+        .in('id', drafts.map((concept) => concept.id));
+      if (error) throw error;
+      publishDraftsStatus.textContent = `${drafts.length} קונספטים פורסמו לקוראים.`;
+      await loadConceptList();
+    } catch (error) {
+      publishDraftsStatus.textContent = `הפרסום נכשל: ${error instanceof Error ? error.message : 'שגיאה לא ידועה.'}`;
+    } finally {
+      publishDraftsButton.disabled = false;
     }
   });
 
