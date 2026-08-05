@@ -57,6 +57,12 @@ import { withBase } from '../lib/urls';
     </form>
   </dialog>
 
+  <dialog class="reader-dialog" data-reader-dialog aria-labelledby="reader-title">
+    <div class="reader-bar"><div><p class="overline">CONCEPT PDF</p><h2 id="reader-title" data-reader-title>מסמך קונספט</h2></div><div class="reader-actions"><button class="text-button" type="button" data-reader-fullscreen>פתיחה במסך מלא ↗</button><button class="round-button" type="button" data-close-reader aria-label="סגירת מסמך">×</button></div></div>
+    <button class="reader-preview" type="button" data-reader-open aria-label="פתיחת ה־PDF במסך מלא"><iframe data-reader-frame title="תצוגה מקדימה של PDF"></iframe><span>לחצו לקריאה במסך מלא</span></button>
+    <p class="reader-hint">המסמך המלא נפתח בקורא הטבעי של הדפדפן — גלילה, דפדוף וזום בלי עיוות.</p>
+  </dialog>
+
   <header class="app-header">
     <div class="app-brand"><p class="overline">SINAI / CONCEPT ROOM</p><h1>מה ממשיכים להפיק?</h1></div>
     <div class="header-actions">

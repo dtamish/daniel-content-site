@@ -1,5 +1,5 @@
 export const DECISIONS = Object.freeze({
-  'priority-approved': 'מאושר להפקה ולקדם בפריוריטי',
+  'priority-approved': 'מאושר להפקה ולקדם במיידי',
   'schedule-approved': 'מאושר להפקה בסדר לוח השידורים',
   wait: 'להמתין עם זה',
   canceled: 'לא מאושר להפקה — לבטל רעיון',

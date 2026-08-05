@@ -177,7 +177,7 @@ test('concept review home exposes the focused review flow and exactly four decis
 
   assert.match(home, /<h1>מה ממשיכים להפיק\?<\/h1>/);
   assert.match(home, /data-concept-grid/);
-  assert.match(home, /מאושר להפקה ולקדם בפריוריטי/);
+  assert.match(home, /מאושר להפקה ולקדם במיידי/);
   assert.match(home, /מאושר להפקה בסדר לוח השידורים/);
   assert.match(home, /להמתין עם זה/);
   assert.match(home, /לא מאושר להפקה — לבטל רעיון/);
@@ -232,15 +232,17 @@ test('admin can explicitly publish imported drafts after review', () => {
   assert.match(adminScript, /publication_status.*published/);
 });
 
-test('concept cards open the original PDF in a clean native reader and use concise unique copy', () => {
+test('reader preview opens in a focused dialog and can expand to the browser PDF viewer', () => {
   const reviewScript = readFileSync(join(root, 'src/scripts/review-app.ts'), 'utf8');
   const reviewApp = readFileSync(join(root, 'src/components/ReviewApp.astro'), 'utf8');
   const styles = readFileSync(join(root, 'src/styles/global.css'), 'utf8');
 
-  assert.match(reviewScript, /window\.open\(concept\.pdfUrl, '_blank', 'noopener,noreferrer'\)/);
+  assert.match(reviewScript, /showModal\(\)/);
+  assert.match(reviewScript, /window\.open\(activeConcept\.pdfUrl, '_blank', 'noopener,noreferrer'\)/);
   assert.doesNotMatch(reviewScript, /pdfjsLib|getDocument\(/);
   assert.match(reviewScript, /compactDescription\(concept\.description\)/);
-  assert.doesNotMatch(reviewApp, /data-document-viewer|data-pdf-canvas|data-swipe-tip/);
+  assert.match(reviewApp, /data-reader-dialog/);
+  assert.match(reviewApp, /data-reader-frame/);
   assert.match(reviewApp, />תפריט</);
   assert.match(styles, /color-scheme: dark/);
   assert.match(styles, /--paper: #0b0d0f/);
