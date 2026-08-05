@@ -30,8 +30,8 @@ if (app) {
   function compactDescription(value: string) {
     const normalized = value.replace(/\s+/g, ' ').replace(/\s+([,.!?])/g, '$1').trim();
     const firstSentence = normalized.split(/(?<=[.!?])\s+/).find((part) => part.replace(/[^\p{L}\p{N}]/gu, '').length >= 12) ?? normalized;
-    const preview = firstSentence.slice(0, 220).trim();
-    return preview.length === 220 ? `${preview.replace(/\s+\S*$/, '')}…` : preview;
+    const preview = firstSentence.slice(0, 140).trim();
+    return preview.length === 140 ? `${preview.replace(/\s+\S*$/, '')}…` : preview;
   }
   function readIdentity() { try { const parsed = JSON.parse(localStorage.getItem('concept-approval:identity') ?? 'null'); return parsed?.kind && parsed?.name ? parsed as Identity : null; } catch { return null; } }
   function applyIdentity(next: Identity) { identity = next; localStorage.setItem('concept-approval:identity', JSON.stringify(next)); required<HTMLElement>('[data-identity-label]').textContent = next.name; required<HTMLElement>('.avatar').textContent = next.name.slice(0, 1); required<HTMLElement>('[data-management-link]').hidden = next.kind !== 'editor'; }
@@ -47,8 +47,8 @@ if (app) {
       const banner = create('div', `concept-banner fallback-${(concept.priority % 3) + 1}`); if (concept.bannerUrl) { const image = create('img'); image.src = concept.bannerUrl; image.alt = ''; image.loading = 'lazy'; image.decoding = 'async'; banner.replaceChildren(image); } else { banner.append(create('span', 'banner-label', 'קונספט')); }
       const body = create('div', 'concept-card-body'); body.append(create('h3', '', concept.title), create('p', 'concept-description', compactDescription(concept.description)));
       const footer = create('div', 'card-footer'); footer.append(create('span', 'pdf-cue', 'PDF ↗'));
-      const decision = create('button', 'decision-trigger', 'קביעת החלטה'); decision.type = 'button'; decision.addEventListener('click', () => openDecision(concept)); footer.append(decision); body.append(footer);
-      pdf.append(banner, body); article.append(pdf); grid.append(article);
+      const decision = create('button', 'decision-trigger', 'קביעת החלטה'); decision.type = 'button'; decision.addEventListener('click', () => openDecision(concept)); footer.append(decision);
+      pdf.append(banner, body); article.append(pdf, footer); grid.append(article);
     }
   }
   function openDrawer() { drawer.hidden = false; scrim.hidden = false; menuButton.setAttribute('aria-expanded', 'true'); drawer.querySelector<HTMLButtonElement>('button')?.focus(); }
