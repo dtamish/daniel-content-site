@@ -192,6 +192,15 @@ test('concept reader has an explicit reading-progress trail and a final-page han
   assert.match(home, /הגעתם לסוף המסמך/);
 });
 
+test('first visit starts with one optional guided introduction, not an identity wall', () => {
+  const home = readFileSync(join(dist, 'index.html'), 'utf8');
+
+  assert.match(home, /data-welcome-dialog/);
+  assert.match(home, /data-tutorial-dialog/);
+  assert.match(home, /רוצה הדרכה קצרה/);
+  assert.match(home, /data-skip-tutorial/);
+});
+
 test('admin output makes editor authentication and upload scope explicit', () => {
   const admin = readFileSync(join(dist, 'admin/index.html'), 'utf8');
   assert.match(admin, /קישור כניסה|magic.*link/i);

@@ -32,6 +32,8 @@ if (app) {
     return node;
   };
 
+  const welcomeDialog = required<HTMLDialogElement>('[data-welcome-dialog]');
+  const tutorialDialog = required<HTMLDialogElement>('[data-tutorial-dialog]');
   const identityDialog = required<HTMLDialogElement>('[data-identity-dialog]');
   const identityForm = required<HTMLFormElement>('[data-identity-form]');
   const advisorField = required<HTMLElement>('[data-advisor-name]');
@@ -302,6 +304,19 @@ if (app) {
     identityDialog.close();
   });
 
+  function finishOnboarding() {
+    localStorage.setItem('concept-approval:onboarding-v1', 'complete');
+    if (welcomeDialog.open) welcomeDialog.close();
+    if (tutorialDialog.open) tutorialDialog.close();
+  }
+
+  required<HTMLButtonElement>('[data-start-tutorial]').addEventListener('click', () => {
+    welcomeDialog.close();
+    tutorialDialog.showModal();
+  });
+  required<HTMLButtonElement>('[data-skip-tutorial]').addEventListener('click', finishOnboarding);
+  required<HTMLButtonElement>('[data-finish-tutorial]').addEventListener('click', finishOnboarding);
+
   required<HTMLButtonElement>('[data-change-identity]').addEventListener('click', () => identityDialog.showModal());
   openDrawerButton.addEventListener('click', openDrawer);
   required<HTMLButtonElement>('[data-close-drawer]').addEventListener('click', closeDrawer);
@@ -339,7 +354,12 @@ if (app) {
   });
   reviewForm.addEventListener('submit', async (event) => {
     event.preventDefault();
-    if (!activeConcept || !identity) return;
+    if (!activeConcept) return;
+    if (!identity) {
+      reviewStatus.textContent = 'כדי לשמור את ההחלטה, בוחרים איך לחתום עליה.';
+      identityDialog.showModal();
+      return;
+    }
     const data = new FormData(reviewForm);
     const decision = String(data.get('decision') ?? '');
     const notes = String(data.get('notes') ?? '');
@@ -414,7 +434,9 @@ if (app) {
 
   identity = readIdentity();
   if (identity) applyIdentity(identity);
-  else identityDialog.showModal();
+  if (localStorage.getItem('concept-approval:onboarding-v1') !== 'complete') {
+    welcomeDialog.showModal();
+  }
 
   loadConcepts()
     .then((items) => {

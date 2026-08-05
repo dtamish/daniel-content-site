@@ -168,10 +168,23 @@
   .filter-list button.is-active { color: var(--accent-dark); font-weight: 800; }
   .management-link { min-height: 52px; margin-block-start: 1.2rem; padding-inline: 0.8rem; display: flex; align-items: center; justify-content: space-between; background: var(--ink); color: white; text-decoration: none; }
 
-  .identity-dialog {
+  .welcome-dialog, .tutorial-dialog, .identity-dialog {
     width: min(92vw, 500px); padding: 0; border: 1px solid var(--ink); border-radius: 22px; background: var(--surface); box-shadow: 10px 10px 0 rgba(23,34,29,0.25);
   }
-  .identity-dialog::backdrop { background: rgba(23,34,29,0.72); backdrop-filter: blur(3px); }
+  .welcome-dialog::backdrop, .tutorial-dialog::backdrop, .identity-dialog::backdrop { background: rgba(23,34,29,0.72); backdrop-filter: blur(3px); }
+  .welcome-dialog-body, .tutorial-dialog-body { padding: clamp(1.3rem, 5vw, 2rem); }
+  .welcome-dialog h2, .tutorial-dialog h2 { margin-block-start: 0.25rem; font-family: var(--serif); font-size: clamp(2rem, 9vw, 3rem); line-height: 0.95; }
+  .welcome-dialog p:not(.overline) { margin-block-start: 0.85rem; color: var(--muted); font-size: 1.06rem; line-height: 1.5; }
+  .welcome-actions { display: grid; gap: 0.75rem; margin-block-start: 1.5rem; }
+  .text-button { min-height: 46px; border: 0; background: transparent; color: var(--accent-dark); font-weight: 800; text-decoration: underline; text-underline-offset: 3px; }
+  .tutorial-steps { display: grid; gap: 1rem; margin: 1.25rem 0 1.5rem; padding: 0; list-style: none; }
+  .tutorial-steps li { display: grid; grid-template-columns: 56px 1fr; align-items: center; gap: 0.8rem; }
+  .tutorial-steps b, .tutorial-steps small { display: block; }
+  .tutorial-steps small { margin-block-start: 0.18rem; color: var(--muted); line-height: 1.35; }
+  .tutorial-visual { width: 56px; aspect-ratio: 1; display: grid; place-items: center; border: 1px solid var(--ink); border-radius: 14px; font-family: var(--serif); font-size: 1.55rem; font-weight: 800; }
+  .tutorial-card-visual { background: var(--sun); }
+  .tutorial-reader-visual { background: var(--mint); }
+  .tutorial-choice-visual { background: #e8ad98; }
   .identity-dialog form { padding: 1.25rem; }
   .identity-dialog h2 { margin-block-start: 0.25rem; font-family: var(--serif); font-size: 2.25rem; line-height: 1; }
   .form-help { margin-block-start: 0.65rem; color: var(--muted); }
@@ -262,6 +275,8 @@
   .configuration-panel, .approval-panel { grid-template-columns: auto 1fr; }
   .configuration-panel h2, .auth-panel h2, .approval-panel h2, .concept-editor h2, .recent-concepts h2 { font-family: var(--serif); font-size: 2rem; line-height: 1; }
   .configuration-panel p, .auth-panel p, .approval-panel p { margin-block-start: 0.5rem; color: var(--muted); }
+  .setup-link { width: fit-content; min-height: 44px; margin-block-start: 0.9rem; padding: 0.65rem 0.8rem; display: inline-flex; align-items: center; gap: 0.45rem; border: 1px solid var(--ink); border-radius: 9px; background: var(--sun); color: var(--ink); font-weight: 800; text-decoration: none; box-shadow: 0 3px 0 var(--ink); }
+  .setup-link:active { translate: 0 2px; box-shadow: 0 1px 0 var(--ink); }
   .status-icon { width: 42px; aspect-ratio: 1; display: grid; place-items: center; border: 1px solid var(--ink); border-radius: 50%; background: var(--sun); font-weight: 900; }
   .auth-panel form { display: grid; gap: 0.8rem; }
   .text-button { min-height: 44px; padding: 0; border: 0; background: transparent; color: var(--accent-dark); font-weight: 750; text-decoration: underline; text-underline-offset: 0.18em; }

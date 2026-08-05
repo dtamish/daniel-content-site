@@ -4,6 +4,31 @@ import { withBase } from '../lib/urls';
 ---
 
 <div class="review-app" data-review-app data-admin-url={withBase('admin/')}>
+  <dialog class="welcome-dialog" data-welcome-dialog aria-labelledby="welcome-title">
+    <div class="welcome-dialog-body">
+      <p class="overline">חדר קונספטים</p>
+      <h2 id="welcome-title">רוצה הדרכה קצרה?</h2>
+      <p>שלושה צעדים קצרים, ואז מגיעים ישר לתור. אפשר גם לדלג — שום דבר לא ייפגע.</p>
+      <div class="welcome-actions">
+        <button class="primary-button" type="button" data-start-tutorial>כן, תראו לי</button>
+        <button class="text-button" type="button" data-skip-tutorial>לא עכשיו, ללוח הראשי</button>
+      </div>
+    </div>
+  </dialog>
+
+  <dialog class="tutorial-dialog" data-tutorial-dialog aria-labelledby="tutorial-title">
+    <div class="tutorial-dialog-body">
+      <p class="overline">הדרכה קצרה</p>
+      <h2 id="tutorial-title">כך מתקדמים כאן</h2>
+      <ol class="tutorial-steps">
+        <li><span class="tutorial-visual tutorial-card-visual" aria-hidden="true">01</span><span><b>פותחים קונספט</b><small>רואים באנר, כותרת ותיאור קצר לפני הקריאה.</small></span></li>
+        <li><span class="tutorial-visual tutorial-reader-visual" aria-hidden="true">↔</span><span><b>קוראים בקצב שלך</b><small>החלקה, חצים או כפתורי הדפדוף — וההתקדמות תמיד גלויה.</small></span></li>
+        <li><span class="tutorial-visual tutorial-choice-visual" aria-hidden="true">✓</span><span><b>מחליטים בסוף</b><small>בוחרים החלטה אחת, מוסיפים הערה אם צריך, וחוזרים לתור.</small></span></li>
+      </ol>
+      <button class="primary-button" type="button" data-finish-tutorial>הבנתי, ללוח הראשי</button>
+    </div>
+  </dialog>
+
   <dialog class="identity-dialog" data-identity-dialog aria-labelledby="identity-title">
     <form method="dialog" data-identity-form>
       <p class="overline">לפני שמתחילים</p>
