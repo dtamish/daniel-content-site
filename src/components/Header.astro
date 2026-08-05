@@ -4,7 +4,6 @@ import { withBase } from '../lib/urls';
 
 const links = [
   { href: withBase(''), label: 'חדר קונספטים', exact: true },
-  { href: withBase('admin/'), label: 'ניהול קונספטים' },
 ];
 const pathname = Astro.url.pathname;
 const isActive = (href: string, exact = false) => exact ? pathname === href : pathname.startsWith(href);

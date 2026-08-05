@@ -6,7 +6,7 @@ Without Supabase the site intentionally runs as a clearly labelled, device-local
 
 1. Create a Supabase project and copy its Project URL and public `anon` / publishable key.
 2. Under Authentication → Providers, enable Email and Magic Link.
-3. Enable Anonymous Sign-Ins to allow reviewers to submit decisions without email authentication.
+3. Enable Anonymous Sign-Ins. This creates an authenticated reviewer session, but the profile must still be approved by a trusted editor via SQL before RLS allows review writes. The local identity picker is never authorization.
 4. Under Authentication → URL Configuration, set the production Site URL.
 5. Add the exact Redirect URLs you use, for example:
    - `http://localhost:4321/admin/`
