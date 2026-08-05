@@ -7,169 +7,76 @@ import { withBase } from '../lib/urls';
   <dialog class="welcome-dialog" data-welcome-dialog aria-labelledby="welcome-title">
     <div class="welcome-dialog-body">
       <p class="overline">חדר קונספטים</p>
-      <h2 id="welcome-title">רוצה הדרכה קצרה?</h2>
-      <p>שלושה צעדים קצרים, ואז מגיעים ישר לתור. אפשר גם לדלג — שום דבר לא ייפגע.</p>
+      <h2 id="welcome-title">הקונספטים, בלי רעש.</h2>
+      <p>פותחים PDF בחלון קריאה נקי, וחוזרים לכאן כדי לקבל החלטה.</p>
       <div class="welcome-actions">
-        <button class="primary-button" type="button" data-start-tutorial>כן, תראו לי</button>
-        <button class="text-button" type="button" data-skip-tutorial>לא עכשיו, ללוח הראשי</button>
+        <button class="primary-button" type="button" data-start-tutorial>התחלה קצרה</button>
+        <button class="text-button" type="button" data-skip-tutorial>ישר לקונספטים</button>
       </div>
     </div>
   </dialog>
 
   <dialog class="tutorial-dialog" data-tutorial-dialog aria-labelledby="tutorial-title">
     <div class="tutorial-dialog-body">
-      <p class="overline">הדרכה קצרה</p>
-      <h2 id="tutorial-title">כך מתקדמים כאן</h2>
+      <p class="overline">כך זה עובד</p>
+      <h2 id="tutorial-title">קריאה טבעית. החלטה ברורה.</h2>
       <ol class="tutorial-steps">
-        <li><span class="tutorial-visual tutorial-card-visual" aria-hidden="true">01</span><span><b>פותחים קונספט</b><small>רואים באנר, כותרת ותיאור קצר לפני הקריאה.</small></span></li>
-        <li><span class="tutorial-visual tutorial-reader-visual" aria-hidden="true">↔</span><span><b>קוראים בקצב שלך</b><small>החלקה, חצים או כפתורי הדפדוף — וההתקדמות תמיד גלויה.</small></span></li>
-        <li><span class="tutorial-visual tutorial-choice-visual" aria-hidden="true">✓</span><span><b>מחליטים בסוף</b><small>בוחרים החלטה אחת, מוסיפים הערה אם צריך, וחוזרים לתור.</small></span></li>
+        <li><span class="tutorial-visual" aria-hidden="true">01</span><span><b>פותחים PDF</b><small>כל קונספט נפתח בקורא ה־PDF הטבעי של הדפדפן.</small></span></li>
+        <li><span class="tutorial-visual" aria-hidden="true">02</span><span><b>קוראים בקצב שלך</b><small>זום וגלילה רגילים, בלי מציג פנימי.</small></span></li>
+        <li><span class="tutorial-visual" aria-hidden="true">03</span><span><b>מחליטים כאן</b><small>חוזרים לכרטיס ובוחרים החלטה אחת.</small></span></li>
       </ol>
-      <button class="primary-button" type="button" data-finish-tutorial>הבנתי, ללוח הראשי</button>
+      <button class="primary-button" type="button" data-finish-tutorial>הבנתי</button>
     </div>
   </dialog>
 
   <dialog class="identity-dialog" data-identity-dialog aria-labelledby="identity-title">
     <form method="dialog" data-identity-form>
-      <p class="overline">לפני שמתחילים</p>
-      <h2 id="identity-title">מי נכנס/ת לסקירה?</h2>
+      <p class="overline">לפני שמתחילים</p><h2 id="identity-title">מי נכנס/ת לסקירה?</h2>
       <p class="form-help">הבחירה משמשת לתצוגה בלבד. הרשאות עריכה נבדקות בנפרד.</p>
-      <fieldset class="identity-options">
-        <legend class="visually-hidden">בחירת זהות</legend>
+      <fieldset class="identity-options"><legend class="visually-hidden">בחירת זהות</legend>
         <label><input type="radio" name="identity" value="honi" required /> <span>חוני</span></label>
         <label><input type="radio" name="identity" value="itzik" /> <span>איציק</span></label>
         <label><input type="radio" name="identity" value="advisor" /> <span>יועץ</span></label>
         <label><input type="radio" name="identity" value="editor" /> <span>עורך תוכן</span></label>
       </fieldset>
-      <div class="field" data-advisor-name hidden>
-        <label for="advisor-name">שם היועץ/ת <span aria-hidden="true">*</span></label>
-        <input id="advisor-name" name="advisorName" autocomplete="name" maxlength="80" />
-      </div>
+      <div class="field" data-advisor-name hidden><label for="advisor-name">שם היועץ/ת</label><input id="advisor-name" name="advisorName" autocomplete="name" maxlength="80" /></div>
       <button class="primary-button" type="submit">כניסה לסקירה</button>
     </form>
   </dialog>
 
+  <dialog class="decision-dialog" data-decision-dialog aria-labelledby="decision-title">
+    <form method="dialog" data-decision-form>
+      <p class="overline">החלטה</p><h2 id="decision-title" data-decision-title></h2>
+      <fieldset class="decision-options"><legend class="visually-hidden">בחירת החלטה</legend>
+        {Object.entries(DECISIONS).map(([value, label], index) => (
+          <label><input type="radio" name="decision" value={value} required /><span class="decision-number" aria-hidden="true">{String(index + 1).padStart(2, '0')}</span><span>{label}</span><span class="radio-dot" aria-hidden="true"></span></label>
+        ))}
+      </fieldset>
+      <div class="notes-field" data-notes-field hidden><label for="review-notes">הערה לצוות <span>לא חובה</span></label><textarea id="review-notes" name="notes" rows="3" maxlength="1000" placeholder="מה חשוב לקחת לשלב הבא?"></textarea></div>
+      <button class="primary-button decision-submit" type="submit" disabled>שמירת החלטה</button><p class="form-status" data-review-status aria-live="polite"></p>
+    </form>
+  </dialog>
+
   <header class="app-header">
-    <div>
-      <p class="overline">חדר קונספטים</p>
-      <h1>מה ממשיכים להפיק?</h1>
-    </div>
+    <div class="app-brand"><p class="overline">SINAI / CONCEPT ROOM</p><h1>מה ממשיכים להפיק?</h1></div>
     <div class="header-actions">
-      <button class="icon-button" type="button" data-open-drawer aria-controls="filter-drawer" aria-expanded="false">
-        <span aria-hidden="true">☰</span><span>סינון</span>
-      </button>
-      <button class="identity-chip" type="button" data-change-identity aria-label="החלפת זהות">
-        <span class="avatar" aria-hidden="true">?</span><span data-identity-label>בחירת זהות</span>
-      </button>
+      <button class="icon-button" type="button" data-open-drawer aria-controls="filter-drawer" aria-expanded="false"><span aria-hidden="true">☰</span><span>תפריט</span></button>
+      <button class="identity-chip" type="button" data-change-identity aria-label="החלפת זהות"><span class="avatar" aria-hidden="true">?</span><span data-identity-label>בחירת זהות</span></button>
     </div>
   </header>
-
   <div class="mode-notice" data-mode-notice role="status"></div>
 
   <main class="app-main" id="main-content">
-    <section class="swipe-tip" aria-labelledby="swipe-title">
-      <span class="swipe-gesture" aria-hidden="true">←</span>
-      <div>
-        <h2 id="swipe-title">פותחים, מדפדפים, מחליטים</h2>
-        <p>החליקו בין עמודי הקונספט או השתמשו בחצים. ההחלטה מחכה בסוף.</p>
-      </div>
-      <button type="button" data-dismiss-tip aria-label="סגירת ההסבר">×</button>
-    </section>
-
-    <nav class="section-tabs" aria-label="מיקום קונספטים">
-      <button type="button" class="is-active" data-section="queue" aria-pressed="true">בתור</button>
-      <button type="button" data-section="library" aria-pressed="false">ספרייה</button>
-    </nav>
-
-    <div class="queue-heading">
-      <div>
-        <p class="overline" data-list-overline>ממתינים להחלטה</p>
-        <h2 data-list-title>התור הנוכחי</h2>
-      </div>
-      <span class="count-pill" data-result-count aria-live="polite">0 קונספטים</span>
-    </div>
-
-    <section class="concept-grid" data-concept-grid aria-label="קונספטים לסקירה"></section>
-    <p class="empty-list" data-empty-list hidden>אין קונספטים שמתאימים לסינון הזה.</p>
+    <nav class="section-tabs" aria-label="מיקום קונספטים"><button type="button" class="is-active" data-section="queue" aria-pressed="true">בתור</button><button type="button" data-section="library" aria-pressed="false">ספרייה</button></nav>
+    <div class="queue-heading"><div><p class="overline" data-list-overline>ממתינים להחלטה</p><h2 data-list-title>התור הנוכחי</h2></div><span class="count-pill" data-result-count aria-live="polite">0 קונספטים</span></div>
+    <section class="concept-grid" data-concept-grid aria-label="קונספטים לסקירה"></section><p class="empty-list" data-empty-list hidden>אין קונספטים שמתאימים לסינון הזה.</p>
   </main>
 
   <div class="drawer-scrim" data-drawer-scrim hidden></div>
   <aside class="filter-drawer" id="filter-drawer" data-drawer hidden aria-labelledby="drawer-title">
-    <div class="drawer-header">
-      <div><p class="overline">תצוגה</p><h2 id="drawer-title">סינון קונספטים</h2></div>
-      <button class="round-button" type="button" data-close-drawer aria-label="סגירת תפריט הסינון">×</button>
-    </div>
-    <nav class="filter-list" aria-label="סינון לפי החלטה">
-      <button type="button" class="is-active" data-filter="all"><span>הכול</span><span data-filter-count="all">0</span></button>
-      <button type="button" data-filter="pending"><span>ממתינים</span><span data-filter-count="pending">0</span></button>
-      {Object.entries(DECISIONS).map(([value, label]) => (
-        <button type="button" data-filter={value}><span>{label}</span><span data-filter-count={value}>0</span></button>
-      ))}
-    </nav>
-    <a class="management-link" data-management-link href={withBase('admin/')} hidden>
-      <span>ניהול קונספטים</span><span aria-hidden="true">↗</span>
-    </a>
+    <div class="drawer-header"><div><p class="overline">תפריט</p><h2 id="drawer-title">תצוגה</h2></div><button class="round-button" type="button" data-close-drawer aria-label="סגירת תפריט">×</button></div>
+    <nav class="filter-list" aria-label="הצגת קונספטים"><button type="button" class="is-active" data-filter="all"><span>הכול</span><span data-filter-count="all">0</span></button><button type="button" data-filter="pending"><span>ממתינים</span><span data-filter-count="pending">0</span></button>{Object.entries(DECISIONS).map(([value, label]) => (<button type="button" data-filter={value}><span>{label}</span><span data-filter-count={value}>0</span></button>))}</nav>
+    <a class="management-link" data-management-link href={withBase('admin/')} hidden><span>ניהול קונספטים</span><span aria-hidden="true">↗</span></a>
   </aside>
-
-  <section class="detail-view" data-detail-view hidden aria-labelledby="detail-title" tabindex="-1">
-    <header class="detail-header">
-      <button class="back-button" type="button" data-close-detail><span aria-hidden="true">→</span> חזרה לתור</button>
-      <span class="detail-position" data-detail-position></span>
-    </header>
-    <div class="detail-copy">
-      <p class="overline">מסמך קונספט</p>
-      <h2 id="detail-title" data-detail-title></h2>
-      <p data-detail-description></p>
-    </div>
-
-    <div class="reader-meta" aria-label="התקדמות הקריאה במסמך">
-      <span class="reader-label">קריאת קונספט</span>
-      <progress data-reading-progress value="1" max="1" aria-label="התקדמות הקריאה">100%</progress>
-      <output data-page-counter aria-live="polite">עמוד 1 מתוך 1</output>
-    </div>
-    <div class="document-viewer" data-document-viewer tabindex="0" aria-label="מציג מסמך; החליקו אופקית או השתמשו בחצי המקלדת כדי לדפדף">
-      <div class="viewer-loading" data-viewer-loading hidden>טוען מסמך…</div>
-      <canvas data-pdf-canvas hidden aria-label="עמוד PDF"></canvas>
-      <article class="demo-page" data-demo-page>
-        <p class="demo-kicker" data-demo-kicker></p>
-        <h3 data-demo-title></h3>
-        <p data-demo-body></p>
-        <span class="demo-mark" aria-hidden="true">ק</span>
-      </article>
-    </div>
-    <div class="viewer-controls" aria-label="ניווט במסמך">
-      <button type="button" data-prev-page aria-label="העמוד הקודם">→</button>
-      <button type="button" data-next-page aria-label="העמוד הבא">←</button>
-    </div>
-    <p class="reader-next-cue" data-reader-next-cue hidden>הגעתם לסוף המסמך. עכשיו אפשר להחליט.</p>
-
-    <form class="decision-form" data-decision-form>
-      <div class="decision-heading">
-        <p class="overline">סוף המסמך</p>
-        <h3>מה ההחלטה שלך?</h3>
-        <p>יש לבחור אפשרות אחת כדי לשמור.</p>
-      </div>
-      <fieldset class="decision-options">
-        <legend class="visually-hidden">בחירת החלטה</legend>
-        {Object.entries(DECISIONS).map(([value, label], index) => (
-          <label>
-            <input type="radio" name="decision" value={value} required />
-            <span class="decision-number" aria-hidden="true">{String(index + 1).padStart(2, '0')}</span>
-            <span>{label}</span>
-            <span class="radio-dot" aria-hidden="true"></span>
-          </label>
-        ))}
-      </fieldset>
-      <div class="notes-field" data-notes-field hidden>
-        <label for="review-notes">הערה לצוות <span>לא חובה</span></label>
-        <textarea id="review-notes" name="notes" rows="4" maxlength="1000" placeholder="מה חשוב לקחת לשלב הבא?"></textarea>
-      </div>
-      <button class="primary-button decision-submit" type="submit" disabled>שמירת החלטה</button>
-      <p class="form-status" data-review-status aria-live="polite"></p>
-    </form>
-  </section>
 </div>
-
-<script>
-  import '../scripts/review-app';
-</script>
+<script>import '../scripts/review-app';</script>

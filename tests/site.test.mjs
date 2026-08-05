@@ -184,12 +184,12 @@ test('concept review home exposes the focused review flow and exactly four decis
   assert.equal((home.match(/name="decision"/g) ?? []).length, 4);
 });
 
-test('concept reader has an explicit reading-progress trail and a final-page handoff', () => {
+test('concept reader delegates to the browser PDF viewer and keeps the decision separate', () => {
   const home = readFileSync(join(dist, 'index.html'), 'utf8');
 
-  assert.match(home, /data-reading-progress/);
-  assert.match(home, /data-reader-next-cue/);
-  assert.match(home, /הגעתם לסוף המסמך/);
+  assert.match(home, /כל קונספט נפתח בקורא ה־PDF הטבעי של הדפדפן/);
+  assert.match(home, /data-decision-dialog/);
+  assert.doesNotMatch(home, /data-reading-progress|data-document-viewer/);
 });
 
 test('first visit starts with one optional guided introduction, not an identity wall', () => {
@@ -197,7 +197,7 @@ test('first visit starts with one optional guided introduction, not an identity 
 
   assert.match(home, /data-welcome-dialog/);
   assert.match(home, /data-tutorial-dialog/);
-  assert.match(home, /רוצה הדרכה קצרה/);
+  assert.match(home, /התחלה קצרה/);
   assert.match(home, /data-skip-tutorial/);
 });
 
@@ -230,6 +230,20 @@ test('admin can explicitly publish imported drafts after review', () => {
 
   assert.match(admin, /data-publish-drafts/);
   assert.match(adminScript, /publication_status.*published/);
+});
+
+test('concept cards open the original PDF in a clean native reader and use concise unique copy', () => {
+  const reviewScript = readFileSync(join(root, 'src/scripts/review-app.ts'), 'utf8');
+  const reviewApp = readFileSync(join(root, 'src/components/ReviewApp.astro'), 'utf8');
+  const styles = readFileSync(join(root, 'src/styles/global.css'), 'utf8');
+
+  assert.match(reviewScript, /window\.open\(concept\.pdfUrl, '_blank', 'noopener,noreferrer'\)/);
+  assert.doesNotMatch(reviewScript, /pdfjsLib|getDocument\(/);
+  assert.match(reviewScript, /compactDescription\(concept\.description\)/);
+  assert.doesNotMatch(reviewApp, /data-document-viewer|data-pdf-canvas|data-swipe-tip/);
+  assert.match(reviewApp, />תפריט</);
+  assert.match(styles, /color-scheme: dark/);
+  assert.match(styles, /--paper: #0b0d0f/);
 });
 
 test('concept cards preserve source banners and the reader preserves PDF aspect ratio', () => {

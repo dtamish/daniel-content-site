@@ -13,20 +13,20 @@
 
 @layer base {
   :root {
-    color-scheme: light;
-    --paper: #f2efe9;
-    --surface: #fffdf8;
-    --ink: #17221d;
-    --muted: #59645d;
-    --line: #c8c9c0;
-    --soft-line: #dddcd3;
-    --accent: #e4603a;
-    --accent-dark: #9f351c;
-    --sun: #f2c94c;
-    --mint: #a8cbbd;
-    --forest: #173f35;
-    --blue: #5e82a5;
-    --danger: #9e352c;
+    color-scheme: dark;
+    --paper: #0b0d0f;
+    --surface: #14181b;
+    --ink: #f3f6f2;
+    --muted: #a7b0aa;
+    --line: #2b3430;
+    --soft-line: #202723;
+    --accent: #c6ff3c;
+    --accent-dark: #d9ff82;
+    --sun: #c6ff3c;
+    --mint: #22352d;
+    --forest: #e8f1ec;
+    --blue: #87a7ff;
+    --danger: #ff8f87;
     --sans: "Assistant Variable", "Noto Sans Hebrew", Arial, sans-serif;
     --serif: "Frank Ruhl Libre Variable", "Noto Serif Hebrew", Georgia, serif;
     --shell: min(1120px, calc(100% - 32px));
@@ -377,6 +377,65 @@
     .app-header, .site-header, .site-footer, .skip-link, .viewer-controls, .decision-form { display: none !important; }
     body { background: white; }
   }
+}
+
+@layer components {
+  /* Dark default: calm surfaces, high contrast, and no decorative reader chrome. */
+  body::before { display: none; }
+  .app-header { display: grid; grid-template-columns: auto 1fr auto; grid-template-areas: "identity brand menu"; min-height: 76px; border-bottom-color: var(--soft-line); }
+  .app-brand { grid-area: brand; text-align: center; }
+  .header-actions { display: contents; }
+  .header-actions .icon-button { grid-area: menu; justify-self: end; }
+  .header-actions .identity-chip { grid-area: identity; justify-self: start; }
+  .app-header h1 { font-size: clamp(1.2rem, 4vw, 1.8rem); letter-spacing: -0.025em; }
+  .app-header .overline { color: var(--muted); letter-spacing: .14em; }
+  .icon-button, .identity-chip, .round-button { border-color: var(--line); background: transparent; box-shadow: none; color: var(--ink); }
+  .icon-button:hover, .identity-chip:hover, .round-button:hover { border-color: var(--accent); color: var(--accent); }
+  .icon-button:active, .identity-chip:active, .round-button:active { translate: none; box-shadow: none; }
+  .avatar { background: var(--accent); color: #0b0d0f; }
+  .mode-notice { margin-top: 0; padding-block: .45rem; border: 0; border-bottom: 1px solid var(--soft-line); background: transparent; color: var(--muted); font-size: .76rem; }
+  .mode-notice.is-demo { background: transparent; color: #ffd26a; }
+  .section-tabs { max-width: 310px; margin: 1.5rem auto 0; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; }
+  .section-tabs button { min-height: 40px; color: var(--muted); border-bottom: 0; }
+  .section-tabs button.is-active { background: var(--surface); color: var(--accent); }
+  .queue-heading { margin-block: 3rem 1.4rem; }
+  .queue-heading h2 { font-family: var(--sans); font-size: clamp(2rem, 6vw, 3.8rem); font-weight: 780; letter-spacing: -.05em; }
+  .count-pill { border-color: var(--line); background: var(--surface); }
+  .concept-grid { gap: 1rem; }
+  .concept-card-button { border-color: var(--line); border-radius: 14px; background: var(--surface); box-shadow: none; }
+  .concept-card-button:hover { translate: 0 -3px; border-color: var(--accent); box-shadow: 0 12px 32px rgba(0,0,0,.28); }
+  .concept-card-button:active { translate: 0; box-shadow: none; }
+  .concept-banner { border-bottom: 0; background: #1b211e; }
+  .concept-card-body { padding: 1rem 1rem .85rem; }
+  .concept-card h3 { margin-top: 0; font-family: var(--sans); font-size: 1.25rem; line-height: 1.22; }
+  .concept-description { min-height: 3.1em; margin-top: .45rem; color: var(--muted); font-size: .92rem; line-height: 1.55; }
+  .card-footer { margin-top: .95rem; padding-top: .75rem; display: flex; align-items: center; justify-content: space-between; border-top: 1px solid var(--soft-line); }
+  .pdf-cue { color: var(--accent); font-size: .78rem; font-weight: 800; letter-spacing: .08em; direction: ltr; }
+  .decision-trigger { min-height: 34px; padding-inline: .7rem; border: 1px solid var(--line); border-radius: 999px; background: transparent; color: var(--ink); font-size: .78rem; font-weight: 700; }
+  .decision-trigger:hover { color: #0b0d0f; border-color: var(--accent); background: var(--accent); }
+  .reviewer-badges { display: none; }
+  .drawer-scrim { background: rgba(0,0,0,.7); backdrop-filter: blur(5px); }
+  .filter-drawer { inset: 0 auto 0 0; width: min(88vw, 390px); border: 0; border-inline-end: 1px solid var(--line); background: #101315; box-shadow: 20px 0 55px rgba(0,0,0,.5); }
+  .drawer-header { border-bottom-color: var(--soft-line); }
+  .filter-list button { border-bottom-color: var(--soft-line); color: var(--ink); }
+  .filter-list button span:last-child { background: var(--surface); color: var(--muted); }
+  .filter-list button.is-active { color: var(--accent); }
+  .management-link { background: var(--accent); color: #0b0d0f; }
+  .welcome-dialog, .tutorial-dialog, .identity-dialog, .decision-dialog { width: min(92vw, 520px); padding: 0; border: 1px solid var(--line); border-radius: 18px; background: var(--surface); color: var(--ink); box-shadow: 0 24px 80px rgba(0,0,0,.55); }
+  .welcome-dialog::backdrop, .tutorial-dialog::backdrop, .identity-dialog::backdrop, .decision-dialog::backdrop { background: rgba(0,0,0,.78); backdrop-filter: blur(6px); }
+  .decision-dialog form { padding: 1.3rem; }
+  .decision-dialog h2 { margin-top: .3rem; font-size: 1.55rem; line-height: 1.25; }
+  .tutorial-visual { border-color: var(--line); background: #1e2923; color: var(--accent); }
+  .tutorial-steps small, .form-help { color: var(--muted); }
+  .identity-options span, .field input, .field textarea, .field select, .notes-field textarea { border-color: var(--line); background: #0f1214; color: var(--ink); }
+  .identity-options input:checked + span, .decision-options label:has(input:checked) { background: #22321f; box-shadow: none; translate: none; }
+  .primary-button { border: 0; border-radius: 9px; background: var(--accent); color: #0b0d0f; box-shadow: none; }
+  .primary-button:active { translate: none; box-shadow: none; }
+  .decision-options label { border-color: var(--line); background: #101315; }
+  .radio-dot { border-color: var(--muted); }
+  .decision-options input:checked ~ .radio-dot { border-color: var(--accent); }
+  .notes-field label span, .form-status { color: var(--muted); }
+  .text-button { color: var(--accent); }
 }
 
 @layer utilities {
