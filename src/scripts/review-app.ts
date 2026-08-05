@@ -47,6 +47,8 @@ if (app) {
   const reviewStatus = required<HTMLElement>('[data-review-status]');
   const viewer = required<HTMLElement>('[data-document-viewer]');
   const canvas = required<HTMLCanvasElement>('[data-pdf-canvas]');
+  const readingProgress = required<HTMLProgressElement>('[data-reading-progress]');
+  const readerNextCue = required<HTMLElement>('[data-reader-next-cue]');
   const demoPage = required<HTMLElement>('[data-demo-page]');
   const modeNotice = required<HTMLElement>('[data-mode-notice]');
 
@@ -58,7 +60,8 @@ if (app) {
   let pageNumber = 1;
   let pageCount = 1;
   let pdfDocument: Awaited<ReturnType<typeof pdfjsLib.getDocument>['promise']> | null = null;
-  let pointerStart = 0;
+  let pointerStart: { x: number; y: number } | null = null;
+  let resizeFrame: number | null = null;
 
   const decisionLabels: Record<string, string> = {
     'priority-approved': 'פריוריטי',
@@ -165,10 +168,15 @@ if (app) {
   }
 
   function updatePageControls() {
-    required<HTMLOutputElement>('[data-page-counter]').value = `עמוד ${pageNumber} מתוך ${pageCount}`;
+    const pageLabel = `עמוד ${pageNumber} מתוך ${pageCount}`;
+    required<HTMLOutputElement>('[data-page-counter]').value = pageLabel;
+    readingProgress.max = pageCount;
+    readingProgress.value = pageNumber;
+    readingProgress.setAttribute('aria-valuetext', pageLabel);
+    readerNextCue.hidden = pageNumber !== pageCount;
     required<HTMLButtonElement>('[data-prev-page]').disabled = pageNumber <= 1;
     required<HTMLButtonElement>('[data-next-page]').disabled = pageNumber >= pageCount;
-    // Decision form only appears after final page
+    // The decision follows the document, rather than competing with it while reading.
     reviewForm.hidden = pageNumber < pageCount;
   }
 
@@ -180,11 +188,19 @@ if (app) {
       const availableWidth = Math.min(viewer.clientWidth - 32, 980);
       const initial = page.getViewport({ scale: 1 });
       const viewport = page.getViewport({ scale: Math.max(0.5, availableWidth / initial.width) });
+      const outputScale = Math.min(window.devicePixelRatio || 1, 2);
       const context = canvas.getContext('2d');
       if (!context) return;
-      canvas.width = viewport.width;
-      canvas.height = viewport.height;
-      await page.render({ canvas, canvasContext: context, viewport }).promise;
+      canvas.width = Math.floor(viewport.width * outputScale);
+      canvas.height = Math.floor(viewport.height * outputScale);
+      canvas.style.width = `${Math.floor(viewport.width)}px`;
+      canvas.style.height = `${Math.floor(viewport.height)}px`;
+      await page.render({
+        canvas,
+        canvasContext: context,
+        viewport,
+        transform: [outputScale, 0, 0, outputScale, 0, 0],
+      }).promise;
       return;
     }
     const pages = activeConcept.pages.length ? activeConcept.pages : [{
@@ -365,11 +381,31 @@ if (app) {
     if (event.key === 'ArrowLeft') { event.preventDefault(); changePage(1); }
     if (event.key === 'ArrowRight') { event.preventDefault(); changePage(-1); }
   });
-  viewer.addEventListener('pointerdown', (event) => { pointerStart = event.clientX; });
-  viewer.addEventListener('pointerup', (event) => {
-    const distance = event.clientX - pointerStart;
-    if (Math.abs(distance) > 45) changePage(distance < 0 ? 1 : -1);
+  viewer.addEventListener('pointerdown', (event) => {
+    if (!event.isPrimary) return;
+    pointerStart = { x: event.clientX, y: event.clientY };
+    viewer.setPointerCapture?.(event.pointerId);
   });
+  viewer.addEventListener('pointerup', (event) => {
+    if (!pointerStart || !event.isPrimary) return;
+    const horizontalDistance = event.clientX - pointerStart.x;
+    const verticalDistance = event.clientY - pointerStart.y;
+    pointerStart = null;
+    // Only an intentional horizontal gesture turns a page; normal vertical reading still scrolls.
+    if (Math.abs(horizontalDistance) > 56 && Math.abs(horizontalDistance) > Math.abs(verticalDistance) * 1.35) {
+      changePage(horizontalDistance < 0 ? 1 : -1);
+    }
+  });
+  viewer.addEventListener('pointercancel', () => { pointerStart = null; });
+
+  new ResizeObserver(() => {
+    if (!pdfDocument || !activeConcept) return;
+    if (resizeFrame) cancelAnimationFrame(resizeFrame);
+    resizeFrame = requestAnimationFrame(() => {
+      resizeFrame = null;
+      renderPage().catch((error) => console.error('PDF rerender failed', error));
+    });
+  }).observe(viewer);
 
   modeNotice.textContent = isSupabaseConfigured
     ? 'מחובר למסד הנתונים — החלטות נשמרות לצוות.'

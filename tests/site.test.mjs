@@ -184,6 +184,14 @@ test('concept review home exposes the focused review flow and exactly four decis
   assert.equal((home.match(/name="decision"/g) ?? []).length, 4);
 });
 
+test('concept reader has an explicit reading-progress trail and a final-page handoff', () => {
+  const home = readFileSync(join(dist, 'index.html'), 'utf8');
+
+  assert.match(home, /data-reading-progress/);
+  assert.match(home, /data-reader-next-cue/);
+  assert.match(home, /הגעתם לסוף המסמך/);
+});
+
 test('admin output makes editor authentication and upload scope explicit', () => {
   const admin = readFileSync(join(dist, 'admin/index.html'), 'utf8');
   assert.match(admin, /קישור כניסה|magic.*link/i);
