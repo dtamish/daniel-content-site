@@ -16,6 +16,7 @@ if (app) {
   const conceptForm = required<HTMLFormElement>('[data-concept-form]');
   const description = required<HTMLTextAreaElement>('#concept-description');
   const client = getSupabaseClient();
+  const authRedirectUrl = new URL(`${import.meta.env.BASE_URL}admin/`, window.location.origin).toString();
 
   async function showCurrentState() {
     if (!client) {
@@ -29,11 +30,12 @@ if (app) {
       workspace.hidden = true;
       return;
     }
-    const { data: profile } = await client
+    const { data: profile, error: profileError } = await client
       .from('profiles')
       .select('is_editor,approved')
       .eq('id', session.user.id)
       .maybeSingle();
+    if (profileError) throw profileError;
     const authorized = Boolean(profile?.is_editor && profile?.approved);
     authPanel.hidden = true;
     approvalPanel.hidden = authorized;
@@ -73,9 +75,18 @@ if (app) {
     const form = event.currentTarget as HTMLFormElement;
     const email = String(new FormData(form).get('email') ?? '');
     authStatus.textContent = 'שולח קישור…';
-    const { error } = await client.auth.signInWithOtp({ email, options: { emailRedirectTo: window.location.href } });
+    const { error } = await client.auth.signInWithOtp({ email, options: { emailRedirectTo: authRedirectUrl } });
     authStatus.textContent = error ? `השליחה נכשלה: ${error.message}` : 'הקישור נשלח. אפשר לעבור לתיבת הדואר.';
   });
+
+  if (client) {
+    client.auth.onAuthStateChange(() => {
+      showCurrentState().catch((error) => {
+        authPanel.hidden = false;
+        authStatus.textContent = error instanceof Error ? error.message : 'לא ניתן לבדוק את מצב הכניסה.';
+      });
+    });
+  }
 
   app.querySelectorAll<HTMLButtonElement>('[data-sign-out]').forEach((button) => button.addEventListener('click', async () => {
     await client?.auth.signOut();

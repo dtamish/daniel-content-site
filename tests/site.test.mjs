@@ -209,6 +209,12 @@ test('admin output makes editor authentication and upload scope explicit', () =>
   assert.match(admin, /500/);
 });
 
+test('admin refreshes its authorization state when the magic-link session arrives', () => {
+  const adminScript = readFileSync(join(root, 'src/scripts/admin-app.ts'), 'utf8');
+
+  assert.match(adminScript, /auth\.onAuthStateChange/);
+});
+
 test('admin offers a manifest-backed bulk import for the prepared concept package', () => {
   const admin = readFileSync(join(dist, 'admin/index.html'), 'utf8');
 
