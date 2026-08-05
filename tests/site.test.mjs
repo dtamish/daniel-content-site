@@ -232,6 +232,18 @@ test('admin can explicitly publish imported drafts after review', () => {
   assert.match(adminScript, /publication_status.*published/);
 });
 
+test('concept cards preserve source banners and the reader preserves PDF aspect ratio', () => {
+  const reviewScript = readFileSync(join(root, 'src/scripts/review-app.ts'), 'utf8');
+  const styles = readFileSync(join(root, 'src/styles/global.css'), 'utf8');
+
+  assert.match(reviewScript, /image\.loading = 'lazy'/);
+  assert.match(reviewScript, /image\.decoding = 'async'/);
+  assert.doesNotMatch(reviewScript, /canvas\.style\.height/);
+  assert.doesNotMatch(reviewScript, /createElement\('div', 'concept-meta'\)/);
+  assert.match(styles, /aspect-ratio: 1785 \/ 690/);
+  assert.doesNotMatch(styles, /max-height: 82vh/);
+});
+
 test('draft content cannot leak into public output', () => {
   const output = walk(dist)
     .filter((path) => ['.html', '.xml', '.txt'].includes(extname(path)))

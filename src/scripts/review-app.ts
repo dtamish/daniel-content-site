@@ -140,6 +140,8 @@ if (app) {
         const image = createElement('img');
         image.src = withBase(concept.bannerUrl);
         image.alt = '';
+        image.loading = 'lazy';
+        image.decoding = 'async';
         banner.replaceChildren(image);
       } else {
         banner.append(createElement('span', 'banner-label', 'קונספט'));
@@ -147,10 +149,7 @@ if (app) {
       }
 
       const body = createElement('div', 'concept-card-body');
-      const meta = createElement('div', 'concept-meta');
-      meta.append(createElement('span', '', concept.section === 'queue' ? 'בתור לסקירה' : 'בספרייה'));
-      meta.append(createElement('span', '', concept.pdfUrl ? 'PDF' : 'הדגמה'));
-      body.append(meta, createElement('h3', '', concept.title), createElement('p', 'concept-description', concept.description));
+      body.append(createElement('h3', '', concept.title), createElement('p', 'concept-description', concept.description));
 
       const badges = createElement('div', 'reviewer-badges');
       badges.setAttribute('aria-label', 'החלטות סוקרים');
@@ -196,7 +195,6 @@ if (app) {
       canvas.width = Math.floor(viewport.width * outputScale);
       canvas.height = Math.floor(viewport.height * outputScale);
       canvas.style.width = `${Math.floor(viewport.width)}px`;
-      canvas.style.height = `${Math.floor(viewport.height)}px`;
       await page.render({
         canvas,
         canvasContext: context,
