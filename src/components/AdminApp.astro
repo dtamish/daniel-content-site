@@ -50,6 +50,27 @@ import { withBase } from '../lib/urls';
     </section>
 
     <div class="editor-workspace" data-editor-workspace hidden>
+      <section class="bulk-import" aria-labelledby="bulk-import-title">
+        <div>
+          <p class="overline">ייבוא ספר מוכן</p>
+          <h2 id="bulk-import-title">העלאת חבילת קונספטים</h2>
+          <p>בחרו את תיקיית חבילת הייבוא הכוללת את <code>manifest.json</code>, תיקיית <code>pdf</code> ותיקיית <code>banners</code>. המערכת בודקת הכול לפני שמתחילה, ומדלגת על קונספט שכבר קיים.</p>
+        </div>
+        <form data-bulk-import-form>
+          <label class="upload-box bulk-folder" for="bulk-import-folder">
+            <span class="upload-icon" aria-hidden="true">↥</span>
+            <span><b>בחירת תיקיית ייבוא</b><small>Chrome או Edge · לא נשלחים קבצים שלא מופיעים במניפסט</small></span>
+            <input id="bulk-import-folder" data-bulk-import-folder type="file" multiple accept=".json,application/pdf,image/png" />
+          </label>
+          <label class="publish-toggle">
+            <input type="checkbox" name="published" />
+            <span><b>פרסום לקוראים אחרי ייבוא תקין</b><small>אם לא מסמנים, כל 22 הקונספטים נשארים טיוטות פרטיות.</small></span>
+          </label>
+          <button class="primary-button" type="submit">בדיקה וייבוא החבילה</button>
+          <p class="form-status" data-bulk-import-status aria-live="polite"></p>
+        </form>
+      </section>
+
       <section class="concept-editor" aria-labelledby="editor-title">
         <div class="editor-heading">
           <div><p class="overline">קונספט חדש</p><h2 id="editor-title">פרטי הקונספט</h2></div>

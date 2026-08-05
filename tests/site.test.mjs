@@ -209,6 +209,15 @@ test('admin output makes editor authentication and upload scope explicit', () =>
   assert.match(admin, /500/);
 });
 
+test('admin offers a manifest-backed bulk import for the prepared concept package', () => {
+  const admin = readFileSync(join(dist, 'admin/index.html'), 'utf8');
+
+  assert.match(admin, /data-bulk-import-form/);
+  assert.match(admin, /data-bulk-import-folder/);
+  assert.match(admin, /manifest\.json/);
+  assert.match(admin, /בחרו את תיקיית חבילת הייבוא/);
+});
+
 test('draft content cannot leak into public output', () => {
   const output = walk(dist)
     .filter((path) => ['.html', '.xml', '.txt'].includes(extname(path)))

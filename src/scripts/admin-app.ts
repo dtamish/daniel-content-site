@@ -86,71 +86,189 @@ if (app) {
     required<HTMLOutputElement>('[data-description-count]').value = `${description.value.length} / 500`;
   });
 
-  conceptForm.addEventListener('submit', async (event) => {
-    event.preventDefault();
-    if (!client) return;
-    const data = new FormData(conceptForm);
-    const banner = data.get('banner') as File;
-    const pdf = data.get('pdf') as File;
-    if (description.value.length > 500) {
-      editorStatus.textContent = 'התיאור מוגבל ל־500 תווים.';
-      return;
-    }
+  type ConceptDraft = {
+    title: string;
+    description: string;
+    section: 'queue' | 'library';
+    priority: number;
+    banner: File | null;
+    pdf: File | null;
+    published: boolean;
+  };
+
+  type ImportManifest = {
+    concept_count?: number;
+    items?: Array<{
+      title?: string;
+      description_draft?: string;
+      priority?: number;
+      pdf?: string;
+      banner?: string;
+    }>;
+  };
+
+  function validateFiles(banner: File | null, pdf: File | null) {
     if (banner?.size && (banner.type !== 'image/png' || banner.size > 5 * 1024 * 1024)) {
-      editorStatus.textContent = 'הבאנר חייב להיות PNG ועד 5MB.';
-      return;
+      throw new Error('הבאנר חייב להיות PNG ועד 5MB.');
     }
     if (pdf?.size && (pdf.type !== 'application/pdf' || pdf.size > 25 * 1024 * 1024)) {
-      editorStatus.textContent = 'מסמך הקונספט חייב להיות PDF ועד 25MB.';
-      return;
+      throw new Error('מסמך הקונספט חייב להיות PDF ועד 25MB.');
     }
+  }
+
+  async function createConcept(draft: ConceptDraft) {
+    if (!client) throw new Error('Supabase אינו מחובר.');
+    if (!draft.title || !draft.description) throw new Error('כותרת ותיאור הם שדות חובה.');
+    if (draft.description.length > 500) throw new Error('התיאור מוגבל ל־500 תווים.');
+    validateFiles(draft.banner, draft.pdf);
 
     const id = crypto.randomUUID();
-    const bannerPath = banner?.size ? `${id}/banner.png` : null;
-    const pdfPath = pdf?.size ? `${id}/concept.pdf` : null;
-    editorStatus.textContent = 'שומר…';
-    const shouldPublish = Boolean(data.get('published'));
+    const bannerPath = draft.banner?.size ? `${id}/banner.png` : null;
+    const pdfPath = draft.pdf?.size ? `${id}/concept.pdf` : null;
     const { error: insertError } = await client.from('concepts').insert({
       id,
-      title: String(data.get('title') ?? '').trim(),
-      description: description.value.trim(),
-      section: data.get('section'),
-      priority: Number(data.get('priority')),
+      title: draft.title,
+      description: draft.description,
+      section: draft.section,
+      priority: draft.priority,
       publication_status: 'draft',
       banner_path: null,
       pdf_path: null,
     });
-    if (insertError) {
-      editorStatus.textContent = `השמירה נכשלה: ${insertError.message}`;
-      return;
-    }
+    if (insertError) throw insertError;
 
     const uploads = [];
-    if (bannerPath) uploads.push(client.storage.from('concept-banners').upload(bannerPath, banner, { contentType: 'image/png', upsert: false }));
-    if (pdfPath) uploads.push(client.storage.from('concept-pdfs').upload(pdfPath, pdf, { contentType: 'application/pdf', upsert: false }));
+    if (bannerPath && draft.banner) uploads.push(client.storage.from('concept-banners').upload(bannerPath, draft.banner, { contentType: 'image/png', upsert: false }));
+    if (pdfPath && draft.pdf) uploads.push(client.storage.from('concept-pdfs').upload(pdfPath, draft.pdf, { contentType: 'application/pdf', upsert: false }));
     const results = await Promise.all(uploads);
     const uploadError = results.find(({ error }) => error)?.error;
     if (uploadError) {
       await client.from('concepts').delete().eq('id', id);
       if (bannerPath) await client.storage.from('concept-banners').remove([bannerPath]);
       if (pdfPath) await client.storage.from('concept-pdfs').remove([pdfPath]);
-      editorStatus.textContent = `העלאת הקובץ נכשלה, ולכן הקונספט לא פורסם: ${uploadError.message}`;
-      return;
+      throw new Error(`העלאת הקובץ נכשלה, ולכן הקונספט לא נשמר: ${uploadError.message}`);
     }
 
     const { error: finalizeError } = await client.from('concepts').update({
       banner_path: bannerPath,
       pdf_path: pdfPath,
-      publication_status: shouldPublish ? 'published' : 'draft',
+      publication_status: draft.published ? 'published' : 'draft',
     }).eq('id', id);
-    if (finalizeError) {
-      editorStatus.textContent = `הקבצים הועלו והקונספט נשאר כטיוטה: ${finalizeError.message}`;
+    if (finalizeError) throw finalizeError;
+  }
+
+  function packagePath(file: File) {
+    return (file.webkitRelativePath || file.name).replaceAll('\\', '/');
+  }
+
+  function packageFile(files: File[], expectedPath: string) {
+    const normalized = expectedPath.replaceAll('\\', '/');
+    return files.find((file) => packagePath(file) === normalized || packagePath(file).endsWith(`/${normalized}`)) ?? null;
+  }
+
+  conceptForm.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    if (!client) return;
+    const data = new FormData(conceptForm);
+    const banner = data.get('banner') as File;
+    const pdf = data.get('pdf') as File;
+    try {
+      editorStatus.textContent = 'שומר…';
+      await createConcept({
+        title: String(data.get('title') ?? '').trim(),
+        description: description.value.trim(),
+        section: data.get('section') === 'library' ? 'library' : 'queue',
+        priority: Number(data.get('priority')),
+        banner: banner?.size ? banner : null,
+        pdf: pdf?.size ? pdf : null,
+        published: Boolean(data.get('published')),
+      });
+      editorStatus.textContent = 'הקונספט נשמר בהצלחה.';
+      conceptForm.reset();
+      required<HTMLOutputElement>('[data-description-count]').value = '0 / 500';
+      await loadConceptList();
+    } catch (error) {
+      editorStatus.textContent = `השמירה נכשלה: ${error instanceof Error ? error.message : 'שגיאה לא ידועה.'}`;
+    }
+  });
+
+  const bulkImportForm = required<HTMLFormElement>('[data-bulk-import-form]');
+  const bulkFolder = required<HTMLInputElement>('[data-bulk-import-folder]');
+  // Astro's HTML attribute typings do not include the Chromium directory picker.
+  // Setting the standard de-facto attribute here keeps the source portable.
+  bulkFolder.setAttribute('webkitdirectory', '');
+  const bulkStatus = required<HTMLElement>('[data-bulk-import-status]');
+
+  bulkImportForm.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    if (!client) return;
+    const files = Array.from(bulkFolder.files ?? []);
+    const manifestFile = files.find((file) => packagePath(file).endsWith('/manifest.json') || packagePath(file) === 'manifest.json');
+    if (!manifestFile) {
+      bulkStatus.textContent = 'יש לבחור את תיקיית חבילת הייבוא עצמה — זו שמכילה manifest.json.';
       return;
     }
-    editorStatus.textContent = 'הקונספט נשמר בהצלחה.';
-    conceptForm.reset();
-    required<HTMLOutputElement>('[data-description-count]').value = '0 / 500';
-    await loadConceptList();
+
+    let manifest: ImportManifest;
+    try {
+      manifest = JSON.parse(await manifestFile.text()) as ImportManifest;
+    } catch {
+      bulkStatus.textContent = 'לא ניתן לקרוא את manifest.json.';
+      return;
+    }
+    const items = manifest.items ?? [];
+    if (!items.length || (manifest.concept_count && manifest.concept_count !== items.length)) {
+      bulkStatus.textContent = 'המניפסט אינו מכיל רשימת קונספטים תקינה.';
+      return;
+    }
+    const missing = items.find((item) => !item.title || !item.pdf || !item.banner || !packageFile(files, item.pdf) || !packageFile(files, item.banner));
+    if (missing) {
+      bulkStatus.textContent = `החבילה אינה שלמה — חסר PDF או באנר עבור „${missing.title ?? 'קונספט ללא כותרת'}”.`;
+      return;
+    }
+
+    const submitButton = bulkImportForm.querySelector<HTMLButtonElement>('button[type="submit"]');
+    if (submitButton) submitButton.disabled = true;
+    let imported = 0;
+    let skipped = 0;
+    const failures: string[] = [];
+    try {
+      const titles = items.map((item) => item.title as string);
+      const { data: existing, error: existingError } = await client.from('concepts').select('title').in('title', titles);
+      if (existingError) throw existingError;
+      const existingTitles = new Set((existing ?? []).map((concept) => concept.title));
+      const shouldPublish = Boolean(new FormData(bulkImportForm).get('published'));
+
+      for (const [index, item] of items.entries()) {
+        if (existingTitles.has(item.title as string)) {
+          skipped += 1;
+          continue;
+        }
+        bulkStatus.textContent = `מייבא ${index + 1} מתוך ${items.length}…`;
+        try {
+          await createConcept({
+            title: (item.title as string).trim(),
+            description: ((item.description_draft ?? `מסמך קונספט: ${item.title}`).trim().slice(0, 500)),
+            section: 'queue',
+            priority: Number.isFinite(Number(item.priority)) ? Number(item.priority) : index + 1,
+            banner: packageFile(files, item.banner as string),
+            pdf: packageFile(files, item.pdf as string),
+            published: shouldPublish,
+          });
+          imported += 1;
+        } catch (error) {
+          failures.push(`${item.title}: ${error instanceof Error ? error.message : 'שגיאה לא ידועה'}`);
+        }
+      }
+      await loadConceptList();
+      bulkStatus.textContent = failures.length
+        ? `הייבוא הסתיים חלקית: ${imported} נוספו, ${skipped} כבר היו קיימים, ${failures.length} נכשלו. ${failures[0]}`
+        : `הייבוא הושלם: ${imported} קונספטים נוספו${skipped ? `, ${skipped} דולגו כי כבר היו קיימים` : ''}.`;
+    } catch (error) {
+      bulkStatus.textContent = `הייבוא לא התחיל: ${error instanceof Error ? error.message : 'שגיאה לא ידועה.'}`;
+    } finally {
+      if (submitButton) submitButton.disabled = false;
+    }
   });
 
   if (!isSupabaseConfigured) configuration.hidden = false;
