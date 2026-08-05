@@ -1,22 +1,8 @@
 ---
+import AdminApp from '../components/AdminApp.astro';
 import BaseLayout from '../layouts/BaseLayout.astro';
 ---
 
-<BaseLayout
-  title="ניהול תוכן"
-  description="כניסה למערכת ניהול התוכן של האתר."
-  robots="noindex, nofollow"
->
-  <div class="reading-shell">
-    <header class="page-heading">
-      <p class="eyebrow">למנהלי האתר</p>
-      <h1>ניהול תוכן</h1>
-      <p>העריכה נעשית ב־Pages CMS, שמעדכן ישירות את קבצי התוכן ב־GitHub. כל שמירה מפעילה בנייה ופריסה מחדש של האתר.</p>
-    </header>
-    <section class="info-panel" aria-labelledby="login-heading">
-      <h2 id="login-heading">כניסה מאובטחת עם GitHub</h2>
-      <p>בפעם הראשונה נכנסים עם חשבון GitHub, מאשרים את אפליקציית Pages CMS עבור המאגר של האתר ובוחרים אותו. לאחר מכן אפשר לערוך טקסטים, תמונות והגדרות בלי לעבוד עם Git.</p>
-      <a class="button-link" href="https://app.pagescms.org/" rel="noreferrer">פתיחת מערכת התוכן</a>
-    </section>
-  </div>
+<BaseLayout title="ניהול קונספטים" description="ניהול מאובטח של מסמכי קונספט." robots="noindex, nofollow" appShell>
+  <AdminApp />
 </BaseLayout>

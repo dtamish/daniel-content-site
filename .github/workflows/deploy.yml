@@ -16,6 +16,9 @@ jobs:
   build:
     permissions:
       contents: read
+    env:
+      PUBLIC_SUPABASE_URL: ${{ secrets.PUBLIC_SUPABASE_URL }}
+      PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.PUBLIC_SUPABASE_ANON_KEY }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository

@@ -157,20 +157,12 @@ test('deploy workflow grants write permissions only to the deploy job', () => {
   }
 });
 
-test('build contains the public routes and durable publishing artifacts', () => {
-  for (const path of [
-    'index.html',
-    'about/index.html',
-    'admin/index.html',
-    'posts/index.html',
-    'posts/welcome/index.html',
-    'posts/publishing-flow/index.html',
-    '404.html',
-    'rss.xml',
-    'robots.txt',
-    'sitemap-index.xml',
-  ]) {
+test('build contains only the review app routes', () => {
+  for (const path of ['index.html', 'admin/index.html', '404.html', 'robots.txt', 'sitemap-index.xml']) {
     assert.ok(existsSync(join(dist, path)), `חסר בתוצר: ${path}`);
+  }
+  for (const path of ['about/index.html', 'posts/index.html', 'rss.xml']) {
+    assert.ok(!existsSync(join(dist, path)), `נמצא תוצר מיושן: ${path}`);
   }
 });
 
@@ -180,30 +172,24 @@ test('404 output does not advertise itself as a canonical or social URL', () => 
   assert.doesNotMatch(html, /<meta property="og:url"/);
 });
 
-test('archive and home post lists preserve the heading hierarchy', () => {
-  const archive = readFileSync(join(dist, 'posts/index.html'), 'utf8');
+test('concept review home exposes the focused review flow and exactly four decisions', () => {
   const home = readFileSync(join(dist, 'index.html'), 'utf8');
 
-  assert.match(archive, /<ul class="post-list">[\s\S]*?<h2>/);
-  assert.doesNotMatch(archive, /<ul class="post-list">[\s\S]*?<h3>/);
-  assert.match(home, /<ul class="post-list">[\s\S]*?<h3>/);
+  assert.match(home, /<h1>מה ממשיכים להפיק\?<\/h1>/);
+  assert.match(home, /data-concept-grid/);
+  assert.match(home, /מאושר להפקה ולקדם בפריוריטי/);
+  assert.match(home, /מאושר להפקה בסדר לוח השידורים/);
+  assert.match(home, /להמתין עם זה/);
+  assert.match(home, /לא מאושר להפקה — לבטל רעיון/);
+  assert.equal((home.match(/name="decision"/g) ?? []).length, 4);
 });
 
-test('article JSON-LD is parseable and embedded with HTML-safe serialization', () => {
-  for (const path of ['posts/welcome/index.html', 'posts/publishing-flow/index.html']) {
-    const html = readFileSync(join(dist, path), 'utf8');
-    const serialized = html.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/)?.[1];
-
-    assert.ok(serialized, `חסר JSON-LD ב-${path}`);
-    assert.doesNotMatch(serialized, /[<>&]/);
-    const data = JSON.parse(serialized);
-    assert.equal(data['@type'], 'Article');
-    assert.match(data.mainEntityOfPage, /^https?:\/\//);
-    assert.ok(
-      new URL(data.mainEntityOfPage).pathname.startsWith(deploymentBase()),
-      `JSON-LD חורג מנתיב הבסיס: ${data.mainEntityOfPage}`,
-    );
-  }
+test('admin output makes editor authentication and upload scope explicit', () => {
+  const admin = readFileSync(join(dist, 'admin/index.html'), 'utf8');
+  assert.match(admin, /קישור כניסה|magic.*link/i);
+  assert.match(admin, /pdf|PDF/);
+  assert.match(admin, /png|PNG/);
+  assert.match(admin, /500/);
 });
 
 test('draft content cannot leak into public output', () => {
@@ -212,12 +198,11 @@ test('draft content cannot leak into public output', () => {
     .map((path) => readFileSync(path, 'utf8'))
     .join('\n');
   assert.doesNotMatch(output, /טיוטת בדיקה — לא אמורה להופיע באתר/);
-  assert.ok(!existsSync(join(dist, 'posts/draft-verification/index.html')));
 });
 
 test('every HTML page is Hebrew RTL, follows the configured index policy, and has one main heading', () => {
   const htmlFiles = walk(dist).filter((path) => extname(path) === '.html');
-  assert.ok(htmlFiles.length >= 7);
+  assert.ok(htmlFiles.length >= 2);
 
   for (const file of htmlFiles) {
     const html = readFileSync(file, 'utf8');
@@ -275,8 +260,8 @@ test('all generated local links, media, and CSS URLs resolve inside the deployme
   }
 });
 
-test('RSS and sitemap URLs stay inside the deployment base', () => {
-  const files = ['rss.xml', 'sitemap-index.xml', 'sitemap-0.xml'];
+test('sitemap URLs stay inside the deployment base', () => {
+  const files = ['sitemap-index.xml', 'sitemap-0.xml'];
   let urlCount = 0;
 
   for (const path of files) {
@@ -290,7 +275,7 @@ test('RSS and sitemap URLs stay inside the deployment base', () => {
     }
   }
 
-  assert.ok(urlCount >= 5, `נמצאו מעט מדי כתובות ב-RSS וב-sitemap: ${urlCount}`);
+  assert.ok(urlCount >= 2, `נמצאו מעט מדי כתובות במפת האתר: ${urlCount}`);
 });
 
 test('robots output follows the configured indexing state', () => {

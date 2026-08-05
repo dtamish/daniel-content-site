@@ -1,0 +1,110 @@
+---
+import { withBase } from '../lib/urls';
+---
+
+<div class="admin-app" data-admin-app>
+  <header class="admin-header">
+    <a class="back-button" href={withBase('')}><span aria-hidden="true">→</span> חזרה לסקירה</a>
+    <span class="admin-lock">ניהול מאובטח</span>
+  </header>
+
+  <main id="main-content" class="admin-main">
+    <div class="admin-intro">
+      <p class="overline">עורך תוכן</p>
+      <h1>ניהול קונספטים</h1>
+      <p>מעלים מסמך, מכינים באנר ומחליטים אם הקונספט נכנס לתור או לספרייה.</p>
+    </div>
+
+    <section class="configuration-panel" data-configuration-panel hidden aria-labelledby="configuration-title">
+      <span class="status-icon" aria-hidden="true">!</span>
+      <div>
+        <h2 id="configuration-title">נדרשת הגדרת Supabase</h2>
+        <p>מסך הניהול אינו פועל במצב מקומי. יש להוסיף את שני משתני הסביבה הציבוריים לפי SUPABASE_SETUP.md.</p>
+      </div>
+    </section>
+
+    <section class="auth-panel" data-auth-panel hidden aria-labelledby="auth-title">
+      <div>
+        <p class="overline">כניסה לעורכים</p>
+        <h2 id="auth-title">קישור כניסה חד־פעמי</h2>
+        <p>בחירת “עורך תוכן” במסך הראשי אינה מעניקה הרשאה. רק פרופיל עורך מאושר יכול להיכנס לכאן.</p>
+      </div>
+      <form data-magic-link-form>
+        <div class="field">
+          <label for="editor-email">כתובת אימייל</label>
+          <input id="editor-email" name="email" type="email" autocomplete="email" required placeholder="editor@example.com" />
+        </div>
+        <button class="primary-button" type="submit">שליחת קישור כניסה</button>
+        <p class="form-status" data-auth-status aria-live="polite"></p>
+      </form>
+    </section>
+
+    <section class="approval-panel" data-approval-panel hidden aria-labelledby="approval-title">
+      <span class="status-icon" aria-hidden="true">⌛</span>
+      <div>
+        <h2 id="approval-title">החשבון מחובר, אך עדיין לא אושר כעורך</h2>
+        <p>יש לאשר את הפרופיל לפי ההוראות ב־SUPABASE_SETUP.md. בחירת תפקיד באפליקציה אינה משנה הרשאות.</p>
+        <button class="text-button" type="button" data-sign-out>יציאה מהחשבון</button>
+      </div>
+    </section>
+
+    <div class="editor-workspace" data-editor-workspace hidden>
+      <section class="concept-editor" aria-labelledby="editor-title">
+        <div class="editor-heading">
+          <div><p class="overline">קונספט חדש</p><h2 id="editor-title">פרטי הקונספט</h2></div>
+          <button class="text-button" type="button" data-sign-out>יציאה</button>
+        </div>
+        <form data-concept-form>
+          <div class="field">
+            <label for="concept-title">כותרת</label>
+            <input id="concept-title" name="title" required maxlength="140" />
+          </div>
+          <div class="field">
+            <div class="label-row"><label for="concept-description">תיאור</label><output data-description-count>0 / 500</output></div>
+            <textarea id="concept-description" name="description" rows="6" required maxlength="500"></textarea>
+          </div>
+          <div class="field-grid">
+            <div class="field">
+              <label for="concept-section">מיקום</label>
+              <select id="concept-section" name="section">
+                <option value="queue">בתור</option>
+                <option value="library">בספרייה</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="concept-priority">סדר בתצוגה</label>
+              <input id="concept-priority" name="priority" type="number" min="0" max="9999" value="100" required />
+            </div>
+          </div>
+          <div class="upload-grid">
+            <label class="upload-box" for="concept-banner">
+              <span class="upload-icon" aria-hidden="true">▭</span>
+              <span><b>באנר רחב</b><small>PNG בלבד, עד 5MB</small></span>
+              <input id="concept-banner" name="banner" type="file" accept="image/png" />
+            </label>
+            <label class="upload-box" for="concept-pdf">
+              <span class="upload-icon" aria-hidden="true">PDF</span>
+              <span><b>מסמך קונספט</b><small>PDF, עד 25MB</small></span>
+              <input id="concept-pdf" name="pdf" type="file" accept="application/pdf" />
+            </label>
+          </div>
+          <label class="publish-toggle">
+            <input type="checkbox" name="published" />
+            <span><b>פרסום לקוראים</b><small>רק קונספט שפורסם והמדיה שלו זמינים לציבור.</small></span>
+          </label>
+          <button class="primary-button" type="submit">שמירת קונספט</button>
+          <p class="form-status" data-editor-status aria-live="polite"></p>
+        </form>
+      </section>
+
+      <aside class="recent-concepts" aria-labelledby="recent-title">
+        <div><p class="overline">תמונה כללית</p><h2 id="recent-title">קונספטים אחרונים</h2></div>
+        <div data-admin-concept-list></div>
+      </aside>
+    </div>
+  </main>
+</div>
+
+<script>
+  import '../scripts/admin-app';
+</script>
