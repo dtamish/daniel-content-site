@@ -1,0 +1,61 @@
+---
+import '@fontsource-variable/assistant';
+import '@fontsource-variable/frank-ruhl-libre';
+import Footer from '../components/Footer.astro';
+import Header from '../components/Header.astro';
+import settings from '../data/site.json';
+import { withBase } from '../lib/urls';
+import '../styles/global.css';
+
+interface Props {
+  title?: string;
+  description?: string;
+  image?: string;
+  type?: 'website' | 'article';
+  robots?: string;
+}
+
+const {
+  title,
+  description = settings.description,
+  image,
+  type = 'website',
+  robots = settings.indexing ? 'index, follow' : 'noindex, nofollow',
+} = Astro.props;
+const fullTitle = title
+  ? `${title} | ${settings.title}`
+  : `${settings.title} — ${settings.siteLabel}`;
+const canonicalURL = new URL(Astro.url.pathname, Astro.site ?? Astro.url.origin);
+const socialImage = image ? new URL(withBase(image), Astro.site ?? Astro.url.origin) : undefined;
+---
+
+<!doctype html>
+<html lang="he" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="generator" content={Astro.generator} />
+    <meta name="theme-color" content="#f4efe5" />
+    <meta name="description" content={description} />
+    <meta name="robots" content={robots} />
+    <link rel="icon" type="image/svg+xml" href={withBase('favicon.svg')} />
+    <link rel="canonical" href={canonicalURL} />
+    <link rel="alternate" type="application/rss+xml" title={`RSS — ${settings.title}`} href={withBase('rss.xml')} />
+    <meta property="og:type" content={type} />
+    <meta property="og:locale" content="he_IL" />
+    <meta property="og:title" content={fullTitle} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonicalURL} />
+    {socialImage && <meta property="og:image" content={socialImage} />}
+    <meta name="twitter:card" content={socialImage ? 'summary_large_image' : 'summary'} />
+    <title>{fullTitle}</title>
+  </head>
+  <body>
+    <a class="skip-link" href="#main-content">דלגו לתוכן</a>
+    <Header />
+    <main id="main-content">
+      <slot />
+    </main>
+    <Footer />
+  </body>
+</html>

@@ -1,0 +1,57 @@
+---
+import type { CollectionEntry } from 'astro:content';
+import { getCollection, render } from 'astro:content';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { formatHebrewDate, withBase } from '../../lib/urls';
+
+export async function getStaticPaths() {
+  const posts = await getCollection('posts', ({ data }) => !data.draft);
+  return posts.map((post) => ({ params: { id: post.id }, props: { post } }));
+}
+
+interface Props {
+  post: CollectionEntry<'posts'>;
+}
+
+const { post } = Astro.props;
+const { Content } = await render(post);
+const cover = post.data.cover?.replace(/^\/+/, '');
+const canonical = new URL(Astro.url.pathname, Astro.site ?? Astro.url.origin).href;
+const jsonLd = JSON.stringify({
+  '@context': 'https://schema.org',
+  '@type': 'Article',
+  headline: post.data.title,
+  description: post.data.description,
+  datePublished: post.data.pubDate.toISOString(),
+  dateModified: (post.data.updatedDate ?? post.data.pubDate).toISOString(),
+  inLanguage: 'he-IL',
+  mainEntityOfPage: canonical,
+});
+---
+
+<BaseLayout
+  title={post.data.title}
+  description={post.data.description}
+  image={cover}
+  type="article"
+>
+  <script is:inline type="application/ld+json" set:html={jsonLd} />
+  <article>
+    <header class="article-header">
+      <div class="reading-shell">
+        <div class="post-meta">
+          <time datetime={post.data.pubDate.toISOString()}>{formatHebrewDate(post.data.pubDate)}</time>
+          {post.data.updatedDate && <span>עודכן {formatHebrewDate(post.data.updatedDate)}</span>}
+          {post.data.tags.length > 0 && <span>{post.data.tags.join(' · ')}</span>}
+        </div>
+        <h1>{post.data.title}</h1>
+        <p class="article-deck">{post.data.description}</p>
+        {cover && <img class="cover-image" src={withBase(cover)} alt={post.data.coverAlt ?? post.data.title} />}
+      </div>
+    </header>
+    <div class="reading-shell prose">
+      <Content />
+      <p class="article-back"><a href={withBase('posts/')}>← חזרה לכל התכנים</a></p>
+    </div>
+  </article>
+</BaseLayout>

@@ -1,0 +1,54 @@
+---
+import { getCollection } from 'astro:content';
+import PostList from '../components/PostList.astro';
+import settings from '../data/site.json';
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { formatHebrewDate, withBase } from '../lib/urls';
+
+const posts = (await getCollection('posts', ({ data }) => !data.draft)).sort(
+  (a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf(),
+);
+const lead = posts.find((post) => post.data.featured) ?? posts[0];
+const remaining = posts.filter((post) => post.id !== lead?.id).slice(0, 6);
+---
+
+<BaseLayout>
+  <div class="shell">
+    <section class="intro" aria-labelledby="home-heading">
+      <div>
+        <p class="eyebrow">{settings.siteLabel}</p>
+        <h1 id="home-heading">{settings.homeHeading}</h1>
+      </div>
+      <p class="intro-copy">{settings.homeIntro}</p>
+    </section>
+
+    {lead ? (
+      <section class="content-section" aria-labelledby="lead-heading">
+        <p class="eyebrow">התוכן האחרון</p>
+        <article class="lead-story">
+          <div class="post-meta">
+            <time datetime={lead.data.pubDate.toISOString()}>{formatHebrewDate(lead.data.pubDate)}</time>
+            {lead.data.tags.length > 0 && <span>{lead.data.tags.join(' · ')}</span>}
+          </div>
+          <div>
+            <h2 id="lead-heading"><a href={withBase(`posts/${lead.id}/`)}>{lead.data.title}</a></h2>
+            <p class="summary">{lead.data.description}</p>
+            <a class="read-link" href={withBase(`posts/${lead.id}/`)}>להמשך קריאה ←</a>
+          </div>
+        </article>
+      </section>
+    ) : (
+      <p class="empty-state">עדיין אין תכנים שפורסמו. טיוטות נשארות מחוץ לאתר עד שמסירים מהן את סימון הטיוטה.</p>
+    )}
+
+    {remaining.length > 0 && (
+      <section class="content-section" aria-labelledby="more-heading">
+        <div class="section-heading">
+          <h2 id="more-heading">עוד במחברת</h2>
+          <a href={withBase('posts/')}>לכל התכנים</a>
+        </div>
+        <PostList posts={remaining} />
+      </section>
+    )}
+  </div>
+</BaseLayout>

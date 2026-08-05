@@ -1,0 +1,17 @@
+---
+import settings from '../data/site.json';
+import { withBase } from '../lib/urls';
+
+const year = new Date().getUTCFullYear();
+---
+
+<footer class="site-footer">
+  <div class="shell footer-inner">
+    <p>© {year} {settings.title}. {settings.footerText}</p>
+    <nav aria-label="קישורי שירות">
+      <a href={withBase('rss.xml')}>RSS</a>
+      <span aria-hidden="true">·</span>
+      <a href={withBase('admin/')} rel="nofollow">ניהול תוכן</a>
+    </nav>
+  </div>
+</footer>

@@ -1,0 +1,25 @@
+---
+import type { CollectionEntry } from 'astro:content';
+import { formatHebrewDate, withBase } from '../lib/urls';
+
+interface Props {
+  posts: CollectionEntry<'posts'>[];
+}
+
+const { posts } = Astro.props;
+---
+
+<ul class="post-list">
+  {posts.map((post) => (
+    <li>
+      <article>
+        <div class="post-meta">
+          <time datetime={post.data.pubDate.toISOString()}>{formatHebrewDate(post.data.pubDate)}</time>
+          {post.data.tags.length > 0 && <span>{post.data.tags.join(' · ')}</span>}
+        </div>
+        <h3><a href={withBase(`posts/${post.id}/`)}>{post.data.title}</a></h3>
+        <p>{post.data.description}</p>
+      </article>
+    </li>
+  ))}
+</ul>

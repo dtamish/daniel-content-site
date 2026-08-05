@@ -1,0 +1,101 @@
+media:
+  input: public/uploads
+  output: /uploads
+
+content:
+  - name: site
+    label: הגדרות האתר
+    type: file
+    path: src/data/site.json
+    format: json
+    fields:
+      - name: title
+        label: שם האתר
+        type: string
+        required: true
+      - name: siteLabel
+        label: שורת זיהוי קצרה
+        type: string
+        required: true
+      - name: description
+        label: תיאור למנועי חיפוש ושיתוף
+        type: text
+        required: true
+      - name: homeHeading
+        label: כותרת ראשית
+        type: string
+        required: true
+      - name: homeIntro
+        label: פסקת פתיחה
+        type: text
+        required: true
+      - name: aboutTitle
+        label: כותרת עמוד אודות
+        type: string
+        required: true
+      - name: aboutBody
+        label: תוכן עמוד אודות
+        type: text
+        required: true
+      - name: footerText
+        label: טקסט תחתון
+        type: string
+        required: true
+      - name: indexing
+        label: לאפשר למנועי חיפוש לאנדקס את האתר
+        type: boolean
+        default: false
+
+  - name: posts
+    label: תכנים
+    type: collection
+    path: src/content/posts
+    format: yaml-frontmatter
+    filename: "{year}-{month}-{day}-{primary}.md"
+    view:
+      primary: title
+      fields: [title, pubDate, draft, featured]
+      sort: pubDate
+      order: desc
+      search: [title, description, tags]
+    fields:
+      - name: title
+        label: כותרת
+        type: string
+        required: true
+      - name: description
+        label: תקציר
+        type: text
+        required: true
+      - name: pubDate
+        label: תאריך פרסום
+        type: date
+        required: true
+      - name: updatedDate
+        label: תאריך עדכון
+        type: date
+        required: false
+      - name: draft
+        label: טיוטה — לא לפרסם
+        type: boolean
+        default: true
+      - name: featured
+        label: תוכן מוביל
+        type: boolean
+        default: false
+      - name: tags
+        label: תגיות
+        type: string
+        list: true
+      - name: cover
+        label: תמונת שער
+        type: image
+        required: false
+      - name: coverAlt
+        label: תיאור נגיש לתמונת השער
+        type: string
+        required: false
+      - name: body
+        label: תוכן
+        type: rich-text
+        required: true
