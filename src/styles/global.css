@@ -382,7 +382,7 @@
 @layer components {
   /* Dark default: calm surfaces, high contrast, and no decorative reader chrome. */
   body::before { display: none; }
-  .app-header { display: grid; grid-template-columns: auto 1fr auto; grid-template-areas: "identity brand menu"; min-height: 76px; border-bottom-color: var(--soft-line); }
+  .app-header { display: grid; grid-template-columns: auto 1fr auto; grid-template-areas: "menu brand identity"; min-height: 76px; border-bottom-color: var(--soft-line); }
   .app-brand { grid-area: brand; text-align: center; }
   .header-actions { display: contents; }
   .header-actions .icon-button { grid-area: menu; justify-self: end; }

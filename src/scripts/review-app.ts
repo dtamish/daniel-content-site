@@ -29,10 +29,8 @@ if (app) {
 
   function compactDescription(value: string) {
     const normalized = value.replace(/\s+/g, ' ').replace(/\s+([,.!?])/g, '$1').trim();
-    const parts = normalized.split(/(?<=[.!?])\s+/).filter(Boolean);
-    const seen = new Set<string>(); const unique: string[] = [];
-    for (const part of parts) { const key = part.replace(/[^\p{L}\p{N}]/gu, '').slice(0, 140); if (key.length < 12 || seen.has(key)) continue; seen.add(key); unique.push(part); if (unique.join(' ').length > 180) break; }
-    const preview = unique.join(' ').slice(0, 220).trim();
+    const firstSentence = normalized.split(/(?<=[.!?])\s+/).find((part) => part.replace(/[^\p{L}\p{N}]/gu, '').length >= 12) ?? normalized;
+    const preview = firstSentence.slice(0, 220).trim();
     return preview.length === 220 ? `${preview.replace(/\s+\S*$/, '')}…` : preview;
   }
   function readIdentity() { try { const parsed = JSON.parse(localStorage.getItem('concept-approval:identity') ?? 'null'); return parsed?.kind && parsed?.name ? parsed as Identity : null; } catch { return null; } }
