@@ -19,12 +19,11 @@ if (app) {
   const client = getSupabaseClient();
   const authRedirectUrl = new URL(`${import.meta.env.BASE_URL}admin/`, window.location.origin).toString();
 
-  async function showCurrentState(initialSession?: Session | null) {
+  async function showCurrentState(session: Session | null) {
     if (!client) {
       configuration.hidden = false;
       return;
     }
-    const session = initialSession ?? (await client.auth.getSession()).data.session;
     if (!session) {
       authPanel.hidden = false;
       approvalPanel.hidden = true;
@@ -316,8 +315,8 @@ if (app) {
   });
 
   if (!isSupabaseConfigured) configuration.hidden = false;
-  else showCurrentState().catch((error) => {
+  else {
     authPanel.hidden = false;
-    authStatus.textContent = error instanceof Error ? error.message : 'לא ניתן לבדוק את מצב הכניסה.';
-  });
+    authStatus.textContent = 'בודק את מצב הכניסה…';
+  }
 }
