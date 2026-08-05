@@ -82,7 +82,9 @@ npm run preview
 
 ## לפני פתיחה למנועי חיפוש
 
-הערך `indexing` ב־`src/data/site.json` הוא כרגע `false`. לאחר החלפת טקסטי הפתיחה ואישור התוכן הציבורי, משנים אותו ל־`true` דרך Pages CMS. אז דפי האתר מקבלים `index, follow` ו־`robots.txt` נפתח לסריקה.
+הערך `indexing` ב־`src/data/site.json` הוא כרגע `false`. לאחר החלפת טקסטי הפתיחה ואישור התוכן הציבורי, משנים אותו ל־`true` דרך Pages CMS. אז הדפים הציבוריים מקבלים `index, follow`, ודפי השירות וה־404 נשארים `noindex`.
+
+בפריסת GitHub Pages תחת נתיב מאגר, `robots.txt` עצמו נמצא תחת אותו נתיב (כאן: `/daniel-content-site/robots.txt`) ולא בשורש החשבון. לכן תגית `meta robots` בכל עמוד היא בקרת האינדוקס העיקרית. מעבר לדומיין מותאם או למאגר `<username>.github.io` ימקם את `robots.txt` בכתובת השורש המקובלת.
 
 ## גבולות וסיכונים
 

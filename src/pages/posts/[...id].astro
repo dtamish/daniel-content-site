@@ -2,6 +2,7 @@
 import type { CollectionEntry } from 'astro:content';
 import { getCollection, render } from 'astro:content';
 import BaseLayout from '../../layouts/BaseLayout.astro';
+import { serializeJsonForHtml } from '../../lib/serialize-json-for-html.mjs';
 import { formatHebrewDate, withBase } from '../../lib/urls';
 
 export async function getStaticPaths() {
@@ -17,7 +18,7 @@ const { post } = Astro.props;
 const { Content } = await render(post);
 const cover = post.data.cover?.replace(/^\/+/, '');
 const canonical = new URL(Astro.url.pathname, Astro.site ?? Astro.url.origin).href;
-const jsonLd = JSON.stringify({
+const jsonLd = serializeJsonForHtml({
   '@context': 'https://schema.org',
   '@type': 'Article',
   headline: post.data.title,

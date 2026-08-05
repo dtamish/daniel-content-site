@@ -13,6 +13,7 @@ interface Props {
   image?: string;
   type?: 'website' | 'article';
   robots?: string;
+  canonical?: boolean;
 }
 
 const {
@@ -21,11 +22,12 @@ const {
   image,
   type = 'website',
   robots = settings.indexing ? 'index, follow' : 'noindex, nofollow',
+  canonical = true,
 } = Astro.props;
 const fullTitle = title
   ? `${title} | ${settings.title}`
   : `${settings.title} — ${settings.siteLabel}`;
-const canonicalURL = new URL(Astro.url.pathname, Astro.site ?? Astro.url.origin);
+const canonicalURL = canonical ? new URL(Astro.url.pathname, Astro.site ?? Astro.url.origin) : undefined;
 const socialImage = image ? new URL(withBase(image), Astro.site ?? Astro.url.origin) : undefined;
 ---
 
@@ -39,13 +41,13 @@ const socialImage = image ? new URL(withBase(image), Astro.site ?? Astro.url.ori
     <meta name="description" content={description} />
     <meta name="robots" content={robots} />
     <link rel="icon" type="image/svg+xml" href={withBase('favicon.svg')} />
-    <link rel="canonical" href={canonicalURL} />
+    {canonicalURL && <link rel="canonical" href={canonicalURL} />}
     <link rel="alternate" type="application/rss+xml" title={`RSS — ${settings.title}`} href={withBase('rss.xml')} />
     <meta property="og:type" content={type} />
     <meta property="og:locale" content="he_IL" />
     <meta property="og:title" content={fullTitle} />
     <meta property="og:description" content={description} />
-    <meta property="og:url" content={canonicalURL} />
+    {canonicalURL && <meta property="og:url" content={canonicalURL} />}
     {socialImage && <meta property="og:image" content={socialImage} />}
     <meta name="twitter:card" content={socialImage ? 'summary_large_image' : 'summary'} />
     <title>{fullTitle}</title>

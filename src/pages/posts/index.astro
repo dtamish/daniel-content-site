@@ -15,6 +15,6 @@ const posts = (await getCollection('posts', ({ data }) => !data.draft)).sort(
       <h1>כל התכנים</h1>
       <p>הכול במקום אחד, מהחדש לישן. טיוטות אינן מופיעות כאן עד שהן מוכנות לפרסום.</p>
     </header>
-    {posts.length > 0 ? <PostList posts={posts} /> : <p class="empty-state">עדיין אין תכנים שפורסמו.</p>}
+    {posts.length > 0 ? <PostList posts={posts} headingLevel={2} /> : <p class="empty-state">עדיין אין תכנים שפורסמו.</p>}
   </div>
 </BaseLayout>

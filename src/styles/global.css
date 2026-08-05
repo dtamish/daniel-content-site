@@ -15,7 +15,7 @@
     --paper: #f4efe5;
     --surface: #fffdf8;
     --ink: #1b2722;
-    --muted: #68736c;
+    --muted: #626d66;
     --line: #cec8bc;
     --accent: #9f3f2e;
     --accent-dark: #742d21;
@@ -131,8 +131,8 @@
     padding-block: 2rem;
     align-items: start;
   }
-  .post-list h3 { font-family: var(--serif); font-size: clamp(1.65rem, 3vw, 2.25rem); line-height: 1.05; }
-  .post-list h3 a { text-decoration: none; }
+  .post-list :where(h2, h3) { font-family: var(--serif); font-size: clamp(1.65rem, 3vw, 2.25rem); line-height: 1.05; }
+  .post-list :where(h2, h3) a { text-decoration: none; }
   .post-list p { color: #45524b; text-wrap: pretty; }
 
   .page-heading { padding-block: clamp(4rem, 8vw, 7rem) 2rem; }

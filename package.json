@@ -10,12 +10,13 @@
     "dev": "astro dev",
     "check": "astro check",
     "build:site": "astro build",
-    "test": "node --test tests/site.test.mjs",
+    "test": "node --test tests/*.test.mjs",
     "build": "npm run check && npm run build:site && npm test",
     "preview": "astro preview",
     "astro": "astro"
   },
   "dependencies": {
+    "@astrojs/markdown-remark": "^7.2.2",
     "@astrojs/rss": "^4.0.19",
     "@astrojs/sitemap": "^3.7.3",
     "@fontsource-variable/assistant": "^5.3.0",

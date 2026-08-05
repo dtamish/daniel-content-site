@@ -1,6 +1,8 @@
 media:
   input: public/uploads
   output: /uploads
+  rename: safe
+  extensions: [jpg, jpeg, png, webp, avif, gif]
 
 content:
   - name: site

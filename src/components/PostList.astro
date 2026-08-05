@@ -4,9 +4,11 @@ import { formatHebrewDate, withBase } from '../lib/urls';
 
 interface Props {
   posts: CollectionEntry<'posts'>[];
+  headingLevel?: 2 | 3;
 }
 
-const { posts } = Astro.props;
+const { posts, headingLevel = 3 } = Astro.props;
+const Heading = headingLevel === 2 ? 'h2' : 'h3';
 ---
 
 <ul class="post-list">
@@ -17,7 +19,7 @@ const { posts } = Astro.props;
           <time datetime={post.data.pubDate.toISOString()}>{formatHebrewDate(post.data.pubDate)}</time>
           {post.data.tags.length > 0 && <span>{post.data.tags.join(' · ')}</span>}
         </div>
-        <h3><a href={withBase(`posts/${post.id}/`)}>{post.data.title}</a></h3>
+        <Heading><a href={withBase(`posts/${post.id}/`)}>{post.data.title}</a></Heading>
         <p>{post.data.description}</p>
       </article>
     </li>
