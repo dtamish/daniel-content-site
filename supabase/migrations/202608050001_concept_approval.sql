@@ -108,10 +108,9 @@ begin
     raise exception 'Profile must be approved to submit reviews';
   end if;
 
-  -- Force both reviewer_id AND reviewer_name from authenticated profile
-  -- Client input is completely ignored
+  -- Force reviewer_id from the authenticated profile. The visible reviewer name
+  -- is joined from profiles on read; it is never a review field supplied by the client.
   new.reviewer_id := profile_record.id;
-  new.reviewer_name := profile_record.display_name;
 
   return new;
 end;
