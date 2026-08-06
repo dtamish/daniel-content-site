@@ -275,31 +275,31 @@ if (appRoot) {
   }
 
   /**
-   * pdf.js refuses a second render onto a canvas while the first is still running,
-   * so paints are queued and any in-flight render is cancelled before the next starts.
+   * pdf.js refuses a second render onto a canvas while the first is still running, so the
+   * previous task is always cancelled first. Nothing ever awaits a render promise: a render
+   * that never settles would otherwise block every later paint, which is exactly what made
+   * zooming look like it did nothing.
    */
   function requestPaint() {
     paintChain = paintChain.catch(() => undefined).then(paint);
     return paintChain;
   }
 
-  async function cancelRender() {
-    if (!renderTask) return;
+  function cancelRender() {
     const task = renderTask;
     renderTask = null;
-    task.cancel();
+    if (!task) return;
     try {
-      await task.promise;
+      task.cancel();
     } catch {
-      // a cancelled render rejects by design
+      // already finished
     }
   }
 
   async function paint() {
     if (!pdf || view >= pageCount) return;
     const token = ++renderToken;
-    await cancelRender();
-    if (token !== renderToken) return;
+    cancelRender();
     const page = await pdf.getPage(view + 1);
     if (token !== renderToken) return;
     const css = fitScale(page) * zoom;
@@ -311,15 +311,14 @@ if (appRoot) {
     // pdf.js renders into the canvas itself; passing a 2D context as well is rejected.
     const task = page.render({ canvas: el.canvas, viewport });
     renderTask = task;
-    try {
-      await task.promise;
-    } catch (error) {
+    const done = () => { if (renderTask === task) renderTask = null; };
+    task.promise.then(done, (error: unknown) => {
+      done();
       if (token !== renderToken) return;   // superseded by a newer page or zoom level
+      if (error && (error as { name?: string }).name === 'RenderingCancelledException') return;
       console.error(error);
       setReaderState(strings.documentFailed);
-    } finally {
-      if (renderTask === task) renderTask = null;
-    }
+    });
   }
 
   function renderDots() {
@@ -331,6 +330,7 @@ if (appRoot) {
   }
 
   function syncView() {
+    clearTrack();
     const onDecision = view === pageCount;
     el.pageSlide.hidden = onDecision;
     need<HTMLElement>('[data-decision-slide]').hidden = !onDecision;
@@ -341,15 +341,19 @@ if (appRoot) {
     if (!onDecision) void requestPaint();
   }
 
-  function goTo(next: number) {
+  function goTo(next: number, animate = true) {
     const target = Math.max(0, Math.min(pageCount, next));
     if (target === view) return;
     zoom = 1;
+    el.pageSlide.classList.remove('is-zoomed');
     el.pageSlide.scrollTo({ top: 0, left: 0 });
     view = target;
-    el.track.classList.remove('slide-in');
-    void el.track.offsetWidth;
-    el.track.classList.add('slide-in');
+    if (animate) {
+      // A swipe animates the track itself, so it must not also run this keyframe.
+      el.track.classList.remove('slide-in');
+      void el.track.offsetWidth;
+      el.track.classList.add('slide-in');
+    }
     syncView();
   }
 
@@ -411,72 +415,167 @@ if (appRoot) {
     el.canvas.height = 0;
   }
 
-  function setZoom(next: number) {
+  /** Keeps the same point of the page under the finger or cursor while scaling. */
+  function setZoom(next: number, anchor?: { x: number; y: number }) {
     const clamped = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, next));
-    if (Math.abs(clamped - zoom) < 0.01) return;
+    if (Math.abs(clamped - zoom) < 0.005) return;
+    const previous = zoom;
+    const box = el.pageSlide.getBoundingClientRect();
+    const point = anchor ?? { x: box.left + box.width / 2, y: box.top + box.height / 2 };
+    const beforeX = el.pageSlide.scrollLeft + (point.x - box.left);
+    const beforeY = el.pageSlide.scrollTop + (point.y - box.top);
     zoom = clamped;
-    el.pageSlide.classList.toggle('is-zoomed', zoom > 1);
-    void requestPaint();
+    el.pageSlide.classList.toggle('is-zoomed', zoom > 1.01);
+    void requestPaint().then(() => {
+      const growth = zoom / previous;
+      el.pageSlide.scrollLeft = beforeX * growth - (point.x - box.left);
+      el.pageSlide.scrollTop = beforeY * growth - (point.y - box.top);
+    });
   }
 
   // --------------------------------------------------------------- gestures
-  let pointerStartX = 0;
-  let pointerStartY = 0;
-  let dragging = false;
-  const pinch = new Map<number, PointerEvent>();
-  let pinchStart = 0;
+  const points = new Map<number, { x: number; y: number }>();
+  let startX = 0;
+  let startY = 0;
+  let startScrollLeft = 0;
+  let startScrollTop = 0;
+  let gesture: 'none' | 'undecided' | 'swipe' | 'pan' | 'pinch' = 'none';
+  let pinchDistance = 0;
   let pinchZoom = 1;
+  let lastTap = 0;
+
+  const distanceBetween = () => {
+    const [a, b] = [...points.values()];
+    return Math.hypot(a.x - b.x, a.y - b.y);
+  };
+  const midpointOf = () => {
+    const [a, b] = [...points.values()];
+    return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+  };
 
   el.stage.addEventListener('pointerdown', (event) => {
-    pinch.set(event.pointerId, event);
-    if (pinch.size === 2) {
-      const [a, b] = [...pinch.values()];
-      pinchStart = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+    points.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    if (points.size === 2) {
+      gesture = 'pinch';
+      pinchDistance = distanceBetween();
       pinchZoom = zoom;
-      dragging = false;
       return;
     }
-    pointerStartX = event.clientX;
-    pointerStartY = event.clientY;
-    dragging = zoom === 1 && view < pageCount;
+    if (points.size > 2) return;
+    try {
+      // Capture, or the gesture dies the moment the finger leaves this element.
+      el.stage.setPointerCapture(event.pointerId);
+    } catch {
+      // some pointers cannot be captured; the gesture still tracks without it
+    }
+    startX = event.clientX;
+    startY = event.clientY;
+    startScrollLeft = el.pageSlide.scrollLeft;
+    startScrollTop = el.pageSlide.scrollTop;
+    gesture = 'undecided';
   });
 
   el.stage.addEventListener('pointermove', (event) => {
-    if (pinch.has(event.pointerId)) pinch.set(event.pointerId, event);
-    if (pinch.size === 2) {
-      const [a, b] = [...pinch.values()];
-      const distance = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
-      if (pinchStart > 0) setZoom(pinchZoom * (distance / pinchStart));
+    if (!points.has(event.pointerId)) return;
+    points.set(event.pointerId, { x: event.clientX, y: event.clientY });
+
+    if (gesture === 'pinch' && points.size >= 2 && pinchDistance > 0) {
       event.preventDefault();
+      setZoom(pinchZoom * (distanceBetween() / pinchDistance), midpointOf());
       return;
     }
-    if (!dragging) return;
-    const dx = event.clientX - pointerStartX;
-    const dy = event.clientY - pointerStartY;
-    if (Math.abs(dx) < Math.abs(dy)) return;
-    el.track.style.transform = `translateX(${dx * 0.35}px)`;
+    if (gesture === 'none' || gesture === 'pinch') return;
+
+    const dx = event.clientX - startX;
+    const dy = event.clientY - startY;
+    if (gesture === 'undecided') {
+      if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+      // A zoomed page is dragged around; an unzoomed one is swiped between pages.
+      gesture = zoom > 1.01 ? 'pan' : (Math.abs(dx) > Math.abs(dy) ? 'swipe' : 'none');
+    }
+    if (gesture === 'pan') {
+      event.preventDefault();
+      el.pageSlide.scrollLeft = startScrollLeft - dx;
+      el.pageSlide.scrollTop = startScrollTop - dy;
+      return;
+    }
+    if (gesture === 'swipe') {
+      event.preventDefault();
+      const limit = el.stage.clientWidth;
+      const resisted = Math.sign(dx) * Math.min(Math.abs(dx), limit) * 0.9;
+      el.track.style.transition = 'none';
+      el.track.style.transform = `translateX(${resisted}px)`;
+      el.track.style.opacity = String(Math.max(0.35, 1 - Math.abs(resisted) / limit));
+    }
   });
 
-  function endPointer(event: PointerEvent) {
-    pinch.delete(event.pointerId);
-    if (pinch.size < 2) pinchStart = 0;
-    if (!dragging) return;
-    dragging = false;
-    el.track.style.transform = '';
-    const dx = event.clientX - pointerStartX;
-    if (Math.abs(dx) < 55 || Math.abs(dx) < Math.abs(event.clientY - pointerStartY)) return;
+  function releaseSwipe(dx: number) {
+    const width = el.stage.clientWidth;
     const forward = document.documentElement.dir === 'rtl' ? dx > 0 : dx < 0;
-    goTo(view + (forward ? 1 : -1));
+    const target = view + (forward ? 1 : -1);
+    const committed = Math.abs(dx) > Math.min(90, width * 0.22)
+      && target >= 0 && target <= pageCount;
+
+    el.track.style.transition = 'transform .16s ease, opacity .16s ease';
+    if (!committed) {
+      clearTrack();
+      return;
+    }
+    el.track.style.transform = `translateX(${Math.sign(dx) * width * 0.5}px)`;
+    el.track.style.opacity = '0';
+    // The incoming page uses the ordinary slide-in keyframe. Nothing here waits on
+    // requestAnimationFrame, so a throttled frame can never leave the page invisible.
+    window.setTimeout(() => {
+      clearTrack();
+      goTo(target);
+    }, 150);
+  }
+
+  function clearTrack() {
+    el.track.style.transition = '';
+    el.track.style.transform = '';
+    el.track.style.opacity = '';
+  }
+
+  function endPointer(event: PointerEvent) {
+    if (!points.has(event.pointerId)) return;
+    const dx = event.clientX - startX;
+    const dy = event.clientY - startY;
+    points.delete(event.pointerId);
+    try {
+      if (el.stage.hasPointerCapture?.(event.pointerId)) el.stage.releasePointerCapture(event.pointerId);
+    } catch {
+      // nothing to release
+    }
+
+    if (gesture === 'pinch') {
+      if (points.size === 0) gesture = 'none';
+      return;
+    }
+    if (gesture === 'swipe') releaseSwipe(dx);
+    if (gesture === 'undecided' && Math.abs(dx) < 8 && Math.abs(dy) < 8) {
+      const now = event.timeStamp;
+      if (now - lastTap < 320) {
+        setZoom(zoom > 1.01 ? 1 : 2.6, { x: event.clientX, y: event.clientY });
+        lastTap = 0;
+      } else {
+        lastTap = now;
+      }
+    }
+    gesture = points.size ? gesture : 'none';
   }
 
   el.stage.addEventListener('pointerup', endPointer);
   el.stage.addEventListener('pointercancel', endPointer);
 
   el.stage.addEventListener('wheel', (event) => {
-    if (!event.ctrlKey && zoom > 1) return;   // plain wheel pans a zoomed page
+    if (!event.ctrlKey && zoom > 1.01) return;   // plain wheel pans a zoomed page
     event.preventDefault();
-    setZoom(zoom * (event.deltaY < 0 ? 1.12 : 1 / 1.12));
+    setZoom(zoom * (event.deltaY < 0 ? 1.12 : 1 / 1.12), { x: event.clientX, y: event.clientY });
   }, { passive: false });
+
+  need<HTMLButtonElement>('[data-zoom-in]').addEventListener('click', () => setZoom(zoom * 1.4));
+  need<HTMLButtonElement>('[data-zoom-out]').addEventListener('click', () => setZoom(zoom / 1.4));
 
   el.stage.addEventListener('dblclick', () => setZoom(zoom > 1 ? 1 : 2.4));
 

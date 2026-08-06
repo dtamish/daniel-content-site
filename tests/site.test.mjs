@@ -206,6 +206,11 @@ test('the reader pages a rendered document and ends on the decision', () => {
   assert.match(reviewScript, /pdfjs\.getDocument\(/);
   assert.match(reviewScript, /pointerdown/);
   assert.match(reviewScript, /view = target/);
+  // Touch gestures die without pointer capture once the finger leaves the element.
+  assert.match(reviewScript, /setPointerCapture/);
+  assert.match(reviewScript, /releasePointerCapture/);
+  assert.match(reviewScript, /gesture = 'pinch'/);
+  assert.match(reviewScript, /function releaseSwipe/);
 });
 
 test('opening the room asks who is reviewing instead of running an onboarding tour', () => {
@@ -265,9 +270,21 @@ test('page renders are serialised so two never share the canvas', () => {
   // when a zoom, a page change and a resize overlap.
   assert.match(reviewScript, /function requestPaint\(\)/);
   assert.match(reviewScript, /paintChain = paintChain/);
-  assert.match(reviewScript, /async function cancelRender\(\)/);
+  assert.match(reviewScript, /function cancelRender\(\)/);
   assert.match(reviewScript, /task\.cancel\(\)/);
   assert.doesNotMatch(reviewScript, /void paint\(\)/);
+  // A render promise that never settles must not be able to block every later paint.
+  assert.doesNotMatch(reviewScript, /await task\.promise/);
+  assert.match(reviewScript, /task\.promise\.then\(done/);
+});
+
+test('a swipe cannot leave the page stuck invisible', () => {
+  const reviewScript = readFileSync(join(root, 'src/scripts/review-app.ts'), 'utf8');
+
+  // requestAnimationFrame is throttled in background tabs, so the restore must not need it.
+  assert.match(reviewScript, /function clearTrack\(\)/);
+  assert.match(reviewScript, /function syncView\(\)\s*\{\s*clearTrack\(\);/);
+  assert.doesNotMatch(reviewScript, /requestAnimationFrame\(\(\) => \{\s*el\.track/);
 });
 
 test('closing the reader releases the signed document URL', () => {
