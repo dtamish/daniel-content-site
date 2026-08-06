@@ -19,13 +19,15 @@ SINAI Concept Room is a fast review surface for concept documents. Its job is to
 
 ### UX decisions that are fixed
 
-- Default language is Hebrew / RTL. English must eventually be a true LTR content package, not a translated UI over Hebrew documents.
+- Default language is Hebrew / RTL. English is a true LTR content package, not a translated UI over Hebrew documents. The language switch is hot: no reload, and it swaps `lang`/`dir`, every UI string, the catalogue and the document together.
 - Default visual mode is dark, minimal and high-contrast. Accent is orange (`--accent: #ff7a1a`), **not green**.
-- In RTL, the menu drawer opens from the **right**.
-- A concept card is intentionally quiet: banner, title, concise description, decision status/history and action. Do not restore decorative metadata overlays such as “PDF” or “בתור לסקירה” over banners.
+- The flow is deliberately narrow: say who you are → pick a document → page through it → decide. There is no onboarding tour and no welcome screen; the first thing a visitor sees is the identity question.
+- Navigation is three tabs — ממתינים / מאושרים / נדחו — driven by each concept's latest decision. There is no side drawer and no secondary filter list.
+- A concept card is intentionally quiet: banner, title, concise description, latest decision. Do not restore decorative metadata overlays such as “PDF” or “בתור לסקירה” over banners.
 - Preserve source banner composition. Use only verified, private derivatives if optimizing weight.
-- The PDF experience is a focused in-app dialog containing a browser-native PDF `iframe`, a clear close button and a “full screen / browser viewer” action. Do **not** bring back a canvas/PDF.js page renderer, forced orientation, custom swipe, or artificial page height.
-- PDF dialog close must clear its iframe `src`, so a signed URL is not left live in the page.
+- The reader is a full-screen dark surface that renders the document **page by page with PDF.js onto a canvas**: pinch and wheel zoom, drag to pan when zoomed, horizontal swipe or the ‹ › buttons to change page, arrow keys and Escape. It is not an embedded browser viewer, and there is no `iframe`.
+- The document ends on the decision: after the last page the pager shows the decision panel. That is where a review is saved.
+- Closing the reader must destroy the PDF.js loading task and clear the canvas, so a signed URL is not left live in the page.
 - The four permitted decision values are the source of truth in `src/lib/review-state.mjs`:
   1. `priority-approved` — `מאושר להפקה ולקדם במיידי`
   2. `scheduled-approved` — `מאושר להפקה בסדר לוח השידורים`
@@ -36,6 +38,7 @@ SINAI Concept Room is a fast review surface for concept documents. Its job is to
 
 ### Known content facts
 
+- **Re-typeset Hebrew documents (current):** `C:\Users\dtami\Documents\Sinai Concept Review Import v2\` — 22 concepts, 39 pages, one PDF per concept, plus `manifest.json`, `content_report.txt` and `concepts-final.json`. The source templates had broken right-to-left flow (words, numbers, Latin runs and multi-column cards out of order); the text was re-ordered and re-typeset, and every repair is validated to preserve the exact multiset of non-space characters. `content_report.txt` lists every character that was dropped and why.
 - Hebrew source book: `C:\Users\dtami\Downloads\Telegram Desktop\SINAI_Concept_Book_Hebrew_Illustrated_Final.pdf`
 - It has 50 pages and 22 concepts. Source pages excluded from concept documents: **1, 2, 3, 11, 41, 44**.
 - The verified Hebrew range map is in the private import package at `C:\Users\dtami\Documents\Sinai Concept Review Import\manifest.json`. Important multi-page examples: Abraham 21–24, Esther 25–28, Moses 29–31, Ruth 32–34. Do not split continuation pages.
@@ -67,8 +70,9 @@ C:\Users\dtami\daniel-content-site\
 │   ├── layouts/
 │   │   └── BaseLayout.astro              # document shell, fonts and global CSS import
 │   ├── lib/
-│   │   ├── concept-repository.ts         # Supabase reads/writes/signed media URLs
-│   │   ├── review-state.mjs              # decision labels, review filtering/badges
+│   │   ├── concept-repository.ts         # Supabase reads/writes/signed media URLs, locale filter
+│   │   ├── i18n.ts                       # Locale type + the single source of truth for UI strings
+│   │   ├── review-state.mjs              # decision labels per locale, tab status, review badges
 │   │   └── urls.ts                       # GitHub Pages base-path helper
 │   ├── pages/
 │   │   ├── index.astro                   # `/` → public concept room
@@ -77,7 +81,8 @@ C:\Users\dtami\daniel-content-site\
 │   │   ├── review-app.ts                 # public runtime state, cards, reader, review UI
 │   │   └── admin-app.ts                  # auth/import/publish runtime
 │   └── styles/
-│       └── global.css                    # design tokens, RTL/LTR, reader, drawer, responsive CSS
+│       ├── global.css                    # design tokens and shared base styles
+│       └── room.css                      # the concept room: header, tabs, cards, reader, decision
 ├── supabase/
 │   └── migrations/
 │       ├── 202608050001_concept_approval.sql # base schema/RLS/private buckets
@@ -112,7 +117,7 @@ The UI must remain usable in a clearly labelled local demo mode when Supabase pu
 
 | Route | Source | Purpose | Important DOM/data keys |
 |---|---|---|---|
-| `/` | `src/pages/index.astro` → `ReviewApp.astro` | Published catalog, review cards, identity, PDF reader | `data-review-app`, `data-concept-grid`, `data-reader-dialog`, `data-reader-frame`, `data-reader-fullscreen`, `data-reader-open`, `data-close-reader`, `data-open-drawer`, `data-drawer`, `data-decision-form` |
+| `/` | `src/pages/index.astro` → `ReviewApp.astro` | Published catalog, review cards, identity, paged reader | `data-review-app`, `data-concept-grid`, `data-tab`, `data-locale-toggle`, `data-identity-dialog`, `data-reader`, `data-stage`, `data-page-canvas`, `data-decision-slide`, `data-decision-form`, `data-prev`, `data-next` |
 | `/admin/` | `src/pages/admin.astro` → `AdminApp.astro` | Magic Link, editor import, publishing | bulk import form, `name="locale"`, publish-drafts control |
 | GitHub Pages base | `astro.config.mjs`, `src/lib/urls.ts` | Allows repository deployment under `/daniel-content-site/` | use `withBase(...)`; do not hard-code root-relative app links |
 
