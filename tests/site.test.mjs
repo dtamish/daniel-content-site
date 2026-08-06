@@ -258,6 +258,18 @@ test('admin can explicitly publish imported drafts after review', () => {
   assert.match(adminScript, /publication_status.*published/);
 });
 
+test('page renders are serialised so two never share the canvas', () => {
+  const reviewScript = readFileSync(join(root, 'src/scripts/review-app.ts'), 'utf8');
+
+  // pdf.js throws "Cannot use the same canvas during multiple render() operations"
+  // when a zoom, a page change and a resize overlap.
+  assert.match(reviewScript, /function requestPaint\(\)/);
+  assert.match(reviewScript, /paintChain = paintChain/);
+  assert.match(reviewScript, /async function cancelRender\(\)/);
+  assert.match(reviewScript, /task\.cancel\(\)/);
+  assert.doesNotMatch(reviewScript, /void paint\(\)/);
+});
+
 test('closing the reader releases the signed document URL', () => {
   const reviewScript = readFileSync(join(root, 'src/scripts/review-app.ts'), 'utf8');
 

@@ -73,6 +73,8 @@ if (appRoot) {
   let pageCount = 0;
   let zoom = 1;
   let renderToken = 0;
+  let renderTask: pdfjs.RenderTask | null = null;
+  let paintChain: Promise<unknown> = Promise.resolve();
 
   const create = <K extends keyof HTMLElementTagNameMap>(tag: K, className?: string, text?: string) => {
     const node = document.createElement(tag);
@@ -272,9 +274,32 @@ if (appRoot) {
     return Math.min((box.width - pad) / base.width, (box.height - pad) / base.height);
   }
 
+  /**
+   * pdf.js refuses a second render onto a canvas while the first is still running,
+   * so paints are queued and any in-flight render is cancelled before the next starts.
+   */
+  function requestPaint() {
+    paintChain = paintChain.catch(() => undefined).then(paint);
+    return paintChain;
+  }
+
+  async function cancelRender() {
+    if (!renderTask) return;
+    const task = renderTask;
+    renderTask = null;
+    task.cancel();
+    try {
+      await task.promise;
+    } catch {
+      // a cancelled render rejects by design
+    }
+  }
+
   async function paint() {
     if (!pdf || view >= pageCount) return;
     const token = ++renderToken;
+    await cancelRender();
+    if (token !== renderToken) return;
     const page = await pdf.getPage(view + 1);
     if (token !== renderToken) return;
     const css = fitScale(page) * zoom;
@@ -283,14 +308,17 @@ if (appRoot) {
     el.canvas.width = viewport.width;
     el.canvas.height = viewport.height;
     el.canvas.style.width = `${viewport.width / ratio}px`;
+    // pdf.js renders into the canvas itself; passing a 2D context as well is rejected.
+    const task = page.render({ canvas: el.canvas, viewport });
+    renderTask = task;
     try {
-      // pdf.js renders into the canvas itself; passing a 2D context as well is rejected.
-      await page.render({ canvas: el.canvas, viewport }).promise;
+      await task.promise;
     } catch (error) {
       if (token !== renderToken) return;   // superseded by a newer page or zoom level
       console.error(error);
       setReaderState(strings.documentFailed);
-      return;
+    } finally {
+      if (renderTask === task) renderTask = null;
     }
   }
 
@@ -310,7 +338,7 @@ if (appRoot) {
     el.prev.disabled = view === 0;
     el.next.disabled = view === pageCount;
     renderDots();
-    if (!onDecision) void paint();
+    if (!onDecision) void requestPaint();
   }
 
   function goTo(next: number) {
@@ -369,6 +397,7 @@ if (appRoot) {
     el.reader.hidden = true;
     document.body.classList.remove('reader-open');
     renderToken += 1;
+    void cancelRender();
     // Never leave a signed document URL alive behind a closed reader.
     void loadingTask?.destroy();
     loadingTask = null;
@@ -387,7 +416,7 @@ if (appRoot) {
     if (Math.abs(clamped - zoom) < 0.01) return;
     zoom = clamped;
     el.pageSlide.classList.toggle('is-zoomed', zoom > 1);
-    void paint();
+    void requestPaint();
   }
 
   // --------------------------------------------------------------- gestures
@@ -480,7 +509,7 @@ if (appRoot) {
   window.addEventListener('resize', () => {
     if (el.reader.hidden) return;
     window.clearTimeout(resizeTimer);
-    resizeTimer = window.setTimeout(() => void paint(), 140);
+    resizeTimer = window.setTimeout(() => void requestPaint(), 140);
   });
 
   el.identityForm.addEventListener('change', () => {
