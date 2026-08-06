@@ -206,9 +206,6 @@ test('the reader pages a rendered document and ends on the decision', () => {
   assert.match(reviewScript, /pdfjs\.getDocument\(/);
   assert.match(reviewScript, /pointerdown/);
   assert.match(reviewScript, /view = target/);
-  // Touch gestures die without pointer capture once the finger leaves the element.
-  assert.match(reviewScript, /setPointerCapture/);
-  assert.match(reviewScript, /releasePointerCapture/);
   assert.match(reviewScript, /gesture = 'pinch'/);
   assert.match(reviewScript, /function releaseSwipe/);
 });
@@ -275,7 +272,42 @@ test('page renders are serialised so two never share the canvas', () => {
   assert.doesNotMatch(reviewScript, /void paint\(\)/);
   // A render promise that never settles must not be able to block every later paint.
   assert.doesNotMatch(reviewScript, /await task\.promise/);
-  assert.match(reviewScript, /task\.promise\.then\(done/);
+  assert.match(reviewScript, /document\.createElement\('canvas'\)/);
+  assert.match(reviewScript, /drawImage\(buffer/);
+});
+
+test('a swipe is measured from the last movement, not from the ending event', () => {
+  const reviewScript = readFileSync(join(root, 'src/scripts/review-app.ts'), 'utf8');
+
+  // pointercancel and touchcancel commonly carry clientX 0. Reading the distance from the
+  // ending event turned every swipe into one large move in whichever direction was negative,
+  // which advanced pages in English and did nothing in Hebrew.
+  assert.match(reviewScript, /let lastX = 0;/);
+  assert.match(reviewScript, /const dx = lastX - startX;/);
+  assert.doesNotMatch(reviewScript, /const dx = event\.clientX - startX;/);
+  // touch input is handled with touch events rather than pointer capture
+  assert.match(reviewScript, /addEventListener\('touchstart'/);
+  assert.match(reviewScript, /addEventListener\('touchmove'/);
+  assert.match(reviewScript, /event\.pointerType !== 'mouse'/);
+});
+
+test('the pager names the decision instead of hiding it behind a dot', () => {
+  const reviewScript = readFileSync(join(root, 'src/scripts/review-app.ts'), 'utf8');
+  const styles = readFileSync(join(root, 'src/styles/room.css'), 'utf8');
+
+  assert.match(reviewScript, /decide-stop/);
+  assert.match(reviewScript, /strings\.decisionMarker/);
+  assert.match(reviewScript, /goTo\(pageCount\)/);
+  assert.match(styles, /\.decide-stop/);
+});
+
+test('a decided concept can be moved back to pending without erasing history', () => {
+  const reviewScript = readFileSync(join(root, 'src/scripts/review-app.ts'), 'utf8');
+
+  assert.match(reviewScript, /card-undo/);
+  assert.match(reviewScript, /decision: 'wait'/);
+  // the undo is itself a recorded decision, never a delete
+  assert.doesNotMatch(reviewScript, /\.delete\(\)\s*\.eq\('id'/);
 });
 
 test('a swipe cannot leave the page stuck invisible', () => {

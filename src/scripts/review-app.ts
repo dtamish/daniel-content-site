@@ -232,7 +232,9 @@ if (appRoot) {
 
     const labels = decisionLabels(locale);
     for (const concept of visible) {
-      const card = create('button', 'card');
+      const status = conceptStatus(concept);
+      const article = create('article', 'card');
+      const card = create('button', 'card-open');
       card.type = 'button';
       card.addEventListener('click', () => openReader(concept));
 
@@ -250,14 +252,49 @@ if (appRoot) {
       body.append(create('span', 'card-summary', summary(concept.description)));
 
       const latest = latestReview(concept.reviews);
-      const status = create('span', `card-status is-${conceptStatus(concept)}`);
-      status.textContent = latest
+      const mark = create('span', `card-status is-${status}`);
+      mark.textContent = latest
         ? `${latest.reviewerName} · ${labels[latest.decision as keyof typeof labels] ?? latest.decision}`
         : strings.noDecisionYet;
-      body.append(status);
+      body.append(mark);
 
       card.append(banner, body);
-      el.grid.append(card);
+      article.append(card);
+
+      // A decision is a record, so it is never erased. Moving a concept back to pending
+      // records "hold" as a new decision, which is both an undo and an honest history.
+      if (status !== 'pending') {
+        const actions = create('div', 'card-actions');
+        const undo = create('button', 'card-undo', strings.returnToPending);
+        undo.type = 'button';
+        undo.addEventListener('click', async () => {
+          if (!identity) {
+            el.identityDialog.showModal();
+            return;
+          }
+          undo.disabled = true;
+          undo.textContent = strings.returning;
+          try {
+            await saveReview({ conceptId: concept.id, decision: 'wait', notes: '', identity });
+            concept.reviews.push({
+              reviewerId: `current:${identity.kind}:${identity.name}`,
+              reviewerName: identity.name,
+              decision: 'wait',
+              notes: '',
+              createdAt: new Date().toISOString(),
+            });
+            render();
+          } catch (error) {
+            console.error(error);
+            undo.disabled = false;
+            undo.textContent = strings.decisionFailed;
+          }
+        });
+        actions.append(undo);
+        article.append(actions);
+      }
+
+      el.grid.append(article);
     }
   }
 
@@ -305,14 +342,23 @@ if (appRoot) {
     const css = fitScale(page) * zoom;
     const ratio = Math.min(window.devicePixelRatio || 1, 2);
     const viewport = page.getViewport({ scale: css * ratio });
-    el.canvas.width = viewport.width;
-    el.canvas.height = viewport.height;
-    el.canvas.style.width = `${viewport.width / ratio}px`;
-    // pdf.js renders into the canvas itself; passing a 2D context as well is rejected.
-    const task = page.render({ canvas: el.canvas, viewport });
+    // Each render gets its own canvas. cancel() does not release a canvas synchronously, so
+    // sharing one makes pdf.js reject the next render as "the same canvas" whenever a zoom,
+    // a page change and a resize overlap. The finished bitmap is copied across on success.
+    const buffer = document.createElement('canvas');
+    buffer.width = viewport.width;
+    buffer.height = viewport.height;
+    const task = page.render({ canvas: buffer, viewport });
     renderTask = task;
     const done = () => { if (renderTask === task) renderTask = null; };
-    task.promise.then(done, (error: unknown) => {
+    task.promise.then(() => {
+      done();
+      if (token !== renderToken) return;
+      el.canvas.width = buffer.width;
+      el.canvas.height = buffer.height;
+      el.canvas.style.width = `${buffer.width / ratio}px`;
+      el.canvas.getContext('2d')?.drawImage(buffer, 0, 0);
+    }, (error: unknown) => {
       done();
       if (token !== renderToken) return;   // superseded by a newer page or zoom level
       if (error && (error as { name?: string }).name === 'RenderingCancelledException') return;
@@ -323,10 +369,16 @@ if (appRoot) {
 
   function renderDots() {
     el.dots.replaceChildren();
-    for (let index = 0; index <= pageCount; index += 1) {
-      const dot = create('span', `dot${index === view ? ' is-on' : ''}${index === pageCount ? ' is-end' : ''}`);
-      el.dots.append(dot);
+    for (let index = 0; index < pageCount; index += 1) {
+      el.dots.append(create('span', `dot${index === view ? ' is-on' : ''}`));
     }
+    // The decision is the point of reading the document, so it is a labelled stop on the
+    // pager rather than one more anonymous dot.
+    const decide = create('button', `decide-stop${view === pageCount ? ' is-on' : ''}`);
+    decide.type = 'button';
+    decide.append(create('span', 'decide-icon'), create('span', 'decide-cap', strings.decisionMarker));
+    decide.addEventListener('click', () => goTo(pageCount));
+    el.dots.append(decide);
   }
 
   function syncView() {
@@ -453,71 +505,71 @@ if (appRoot) {
     return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
   };
 
-  el.stage.addEventListener('pointerdown', (event) => {
-    points.set(event.pointerId, { x: event.clientX, y: event.clientY });
-    if (points.size === 2) {
-      gesture = 'pinch';
-      pinchDistance = distanceBetween();
-      pinchZoom = zoom;
-      return;
-    }
-    if (points.size > 2) return;
-    try {
-      // Capture, or the gesture dies the moment the finger leaves this element.
-      el.stage.setPointerCapture(event.pointerId);
-    } catch {
-      // some pointers cannot be captured; the gesture still tracks without it
-    }
-    startX = event.clientX;
-    startY = event.clientY;
+  // The distance travelled is measured from the last movement, never from the ending
+  // event: pointercancel and touchcancel commonly carry clientX 0, which would read as a
+  // large swipe in whichever direction happens to be negative.
+  let lastX = 0;
+  let lastY = 0;
+
+  function beginGesture(x: number, y: number) {
+    startX = lastX = x;
+    startY = lastY = y;
     startScrollLeft = el.pageSlide.scrollLeft;
     startScrollTop = el.pageSlide.scrollTop;
     gesture = 'undecided';
-  });
+  }
 
-  el.stage.addEventListener('pointermove', (event) => {
-    if (!points.has(event.pointerId)) return;
-    points.set(event.pointerId, { x: event.clientX, y: event.clientY });
-
-    if (gesture === 'pinch' && points.size >= 2 && pinchDistance > 0) {
-      event.preventDefault();
-      setZoom(pinchZoom * (distanceBetween() / pinchDistance), midpointOf());
-      return;
-    }
-    if (gesture === 'none' || gesture === 'pinch') return;
-
-    const dx = event.clientX - startX;
-    const dy = event.clientY - startY;
+  function moveGesture(x: number, y: number, prevent: () => void) {
+    lastX = x;
+    lastY = y;
+    const dx = x - startX;
+    const dy = y - startY;
     if (gesture === 'undecided') {
       if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
       // A zoomed page is dragged around; an unzoomed one is swiped between pages.
-      gesture = zoom > 1.01 ? 'pan' : (Math.abs(dx) > Math.abs(dy) ? 'swipe' : 'none');
+      gesture = zoom > 1.01 ? 'pan' : (Math.abs(dx) > Math.abs(dy) * 0.8 ? 'swipe' : 'none');
     }
     if (gesture === 'pan') {
-      event.preventDefault();
+      prevent();
       el.pageSlide.scrollLeft = startScrollLeft - dx;
       el.pageSlide.scrollTop = startScrollTop - dy;
       return;
     }
     if (gesture === 'swipe') {
-      event.preventDefault();
-      const limit = el.stage.clientWidth;
+      prevent();
+      const limit = el.stage.clientWidth || 1;
       const resisted = Math.sign(dx) * Math.min(Math.abs(dx), limit) * 0.9;
       el.track.style.transition = 'none';
       el.track.style.transform = `translateX(${resisted}px)`;
       el.track.style.opacity = String(Math.max(0.35, 1 - Math.abs(resisted) / limit));
     }
-  });
+  }
+
+  function endGesture(timeStamp: number) {
+    const dx = lastX - startX;
+    const dy = lastY - startY;
+    if (gesture === 'swipe') {
+      releaseSwipe(dx);
+    } else if (gesture === 'undecided' && Math.abs(dx) < 8 && Math.abs(dy) < 8) {
+      if (timeStamp - lastTap < 320) {
+        setZoom(zoom > 1.01 ? 1 : 2.6, { x: lastX, y: lastY });
+        lastTap = 0;
+      } else {
+        lastTap = timeStamp;
+      }
+    }
+    gesture = 'none';
+  }
 
   function releaseSwipe(dx: number) {
-    const width = el.stage.clientWidth;
+    const width = el.stage.clientWidth || 1;
+    // In Hebrew a page is turned the way a Hebrew book is: rightwards moves forward.
     const forward = document.documentElement.dir === 'rtl' ? dx > 0 : dx < 0;
-    const target = view + (forward ? 1 : -1);
-    const committed = Math.abs(dx) > Math.min(90, width * 0.22)
-      && target >= 0 && target <= pageCount;
+    const target = Math.max(0, Math.min(pageCount, view + (forward ? 1 : -1)));
+    const far = Math.abs(dx) > Math.min(70, width * 0.16);
 
     el.track.style.transition = 'transform .16s ease, opacity .16s ease';
-    if (!committed) {
+    if (!far || target === view) {
       clearTrack();
       return;
     }
@@ -537,32 +589,57 @@ if (appRoot) {
     el.track.style.opacity = '';
   }
 
-  function endPointer(event: PointerEvent) {
-    if (!points.has(event.pointerId)) return;
-    const dx = event.clientX - startX;
-    const dy = event.clientY - startY;
-    points.delete(event.pointerId);
-    try {
-      if (el.stage.hasPointerCapture?.(event.pointerId)) el.stage.releasePointerCapture(event.pointerId);
-    } catch {
-      // nothing to release
-    }
-
-    if (gesture === 'pinch') {
-      if (points.size === 0) gesture = 'none';
+  // Touch is handled through touch events rather than pointer events: they are the most
+  // widely reliable on phones, and they avoid pointer capture entirely.
+  el.stage.addEventListener('touchstart', (event) => {
+    if (event.touches.length === 2) {
+      const [a, b] = [event.touches[0], event.touches[1]];
+      gesture = 'pinch';
+      pinchDistance = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+      pinchZoom = zoom;
       return;
     }
-    if (gesture === 'swipe') releaseSwipe(dx);
-    if (gesture === 'undecided' && Math.abs(dx) < 8 && Math.abs(dy) < 8) {
-      const now = event.timeStamp;
-      if (now - lastTap < 320) {
-        setZoom(zoom > 1.01 ? 1 : 2.6, { x: event.clientX, y: event.clientY });
-        lastTap = 0;
-      } else {
-        lastTap = now;
-      }
+    if (event.touches.length > 2) return;
+    beginGesture(event.touches[0].clientX, event.touches[0].clientY);
+  }, { passive: false });
+
+  el.stage.addEventListener('touchmove', (event) => {
+    if (gesture === 'pinch') {
+      if (event.touches.length < 2 || pinchDistance <= 0) return;
+      const [a, b] = [event.touches[0], event.touches[1]];
+      event.preventDefault();
+      setZoom(pinchZoom * (Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY) / pinchDistance),
+        { x: (a.clientX + b.clientX) / 2, y: (a.clientY + b.clientY) / 2 });
+      return;
     }
-    gesture = points.size ? gesture : 'none';
+    if (!event.touches.length) return;
+    moveGesture(event.touches[0].clientX, event.touches[0].clientY, () => event.preventDefault());
+  }, { passive: false });
+
+  const finishTouch = (event: TouchEvent) => {
+    if (event.touches.length) return;   // a finger is still down
+    if (gesture === 'pinch') { gesture = 'none'; pinchDistance = 0; return; }
+    endGesture(event.timeStamp);
+  };
+  el.stage.addEventListener('touchend', finishTouch);
+  el.stage.addEventListener('touchcancel', finishTouch);
+
+  // Mouse keeps using pointer events; touch input is already handled above.
+  el.stage.addEventListener('pointerdown', (event) => {
+    if (event.pointerType !== 'mouse') return;
+    points.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    beginGesture(event.clientX, event.clientY);
+  });
+
+  el.stage.addEventListener('pointermove', (event) => {
+    if (event.pointerType !== 'mouse' || !points.has(event.pointerId)) return;
+    moveGesture(event.clientX, event.clientY, () => event.preventDefault());
+  });
+
+  function endPointer(event: PointerEvent) {
+    if (event.pointerType !== 'mouse' || !points.has(event.pointerId)) return;
+    points.delete(event.pointerId);
+    endGesture(event.timeStamp);
   }
 
   el.stage.addEventListener('pointerup', endPointer);

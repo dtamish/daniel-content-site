@@ -133,16 +133,35 @@
   .card {
     display: flex;
     flex-direction: column;
-    padding: 0;
     overflow: hidden;
     border: 1px solid var(--line);
     border-radius: 14px;
     background: var(--surface);
-    text-align: start;
     transition: border-color 0.18s ease, transform 0.18s ease;
   }
   .card:hover { border-color: var(--accent); transform: translateY(-2px); }
-  .card:active { transform: translateY(0); }
+  .card-open {
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+    border: 0;
+    background: none;
+    text-align: start;
+    flex: 1;
+  }
+  .card-actions { padding: 0 0.9rem 0.85rem; }
+  .card-undo {
+    width: 100%;
+    min-height: 38px;
+    border: 1px solid var(--line);
+    border-radius: 9px;
+    background: transparent;
+    color: var(--muted);
+    font-size: 0.82rem;
+    transition: color 0.16s ease, border-color 0.16s ease;
+  }
+  .card-undo:hover { color: var(--ink); border-color: var(--accent); }
+  .card-undo:disabled { opacity: 0.5; }
   .card-banner {
     aspect-ratio: 1785 / 690;
     background: linear-gradient(140deg, #16202b, #0d1218);
@@ -323,19 +342,48 @@
     align-items: center;
     justify-content: center;
     gap: 1.1rem;
-    padding: 0.5rem 1rem calc(0.5rem + env(safe-area-inset-bottom));
-    border-top: 1px solid #171b1f;
+    padding: 0.7rem 1rem calc(0.8rem + env(safe-area-inset-bottom));
+    border-top: 1px solid #1d2227;
+    background: #0c0e11;
   }
-  .reader-dots { display: flex; align-items: center; gap: 0.4rem; }
+  .reader-dots { display: flex; align-items: center; gap: 0.55rem; }
   .reader-dots .dot {
-    width: 6px;
-    height: 6px;
+    width: 7px;
+    height: 7px;
     border-radius: 50%;
-    background: #2c3238;
-    transition: background-color 0.18s ease, width 0.18s ease;
+    background: #333a42;
+    transition: background-color 0.18s ease;
   }
-  .reader-dots .dot.is-end { width: 12px; border-radius: 3px; }
   .reader-dots .dot.is-on { background: var(--accent); }
+
+  /* The decision is the reason the document is open; it gets a name, not a dot. */
+  .decide-stop {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.22rem;
+    margin-inline-start: 0.5rem;
+    padding: 0.25rem 0.7rem 0.2rem;
+    border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+    border-radius: 999px;
+    background: transparent;
+    color: var(--muted);
+    transition: background-color 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+  }
+  .decide-icon {
+    width: 9px;
+    height: 9px;
+    border-radius: 2px;
+    background: var(--accent);
+    transform: rotate(45deg);
+  }
+  .decide-cap { font-size: 0.7rem; letter-spacing: 0.04em; line-height: 1; }
+  .decide-stop.is-on {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--accent-ink);
+  }
+  .decide-stop.is-on .decide-icon { background: var(--accent-ink); }
 
   /* Language swap: content fades rather than reloading the page. */
   .room.is-swapping .room-grid, .room.is-swapping .room-tabs { opacity: 0.25; }

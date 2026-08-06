@@ -36,6 +36,10 @@ type Strings = {
   loadingDocument: string;
   documentFailed: string;
   decideHere: string;
+  decisionMarker: string;
+  returnToPending: string;
+  returning: string;
+  returned: string;
   decisionFor: string;
   decisionNote: string;
   decisionNoteOptional: string;
@@ -84,7 +88,11 @@ const he: Strings = {
   zoomOut: 'הקטנה',
   loadingDocument: 'טוען מסמך…',
   documentFailed: 'לא הצלחנו לפתוח את המסמך.',
-  decideHere: 'החלטה',
+  decideHere: 'הכרעה',
+  decisionMarker: 'הכרעה',
+  returnToPending: 'החזרה לממתינים',
+  returning: 'מחזיר…',
+  returned: 'הוחזר לממתינים.',
   decisionFor: 'ההחלטה שלך על',
   decisionNote: 'הערה לצוות',
   decisionNoteOptional: 'לא חובה',
@@ -134,6 +142,10 @@ const en: Strings = {
   loadingDocument: 'Loading document…',
   documentFailed: 'We could not open this document.',
   decideHere: 'Decide',
+  decisionMarker: 'Decide',
+  returnToPending: 'Move back to pending',
+  returning: 'Moving…',
+  returned: 'Moved back to pending.',
   decisionFor: 'Your decision on',
   decisionNote: 'Note for the team',
   decisionNoteOptional: 'optional',
