@@ -48,6 +48,8 @@ SINAI Concept Room is a fast review surface for concept documents. Its job is to
 - **The Hebrew/English mapping is printed in the source.** Every opening page of the English book carries its Hebrew concept number, stored as `concept_number` in the English manifest. It is what confirms that `abraham`, `esther`, `moses` and `ruth` genuinely have no English document.
 - The English documents are the originally supplied files, deliberately not re-typeset; their text still has the broken flow that was repaired on the Hebrew side.
 - Live state as of 2026-08-06: 22 published Hebrew concepts, 18 published English concepts, 0 reviews.
+- The Hebrew documents were re-typeset a second time to the standard the English edition set: 13pt ALMONI running text (was 10.2pt), ADUMA titles, and a full-bleed hero built from the project's own artwork in `SINAI Concept Book Hebrew - Illustrated\image-assets` rather than a blurred banner. Card banners are now that same artwork, so a concept's title no longer appears twice.
+- The artwork was composed for the left-to-right page. Where its visual weight sits on the right it is mirrored, because the Hebrew title scrim covers that side; `hero-report.json` in the package records which. An archival photograph of a real person (Mark Twain) is never mirrored.
 
 ---
 
@@ -165,7 +167,9 @@ When modifying review reads, select canonical fields needed for history, includi
 
 Current public font packages are Assistant and Frank Ruhl Libre, imported in `BaseLayout.astro`; CSS tokens are in `global.css`.
 
-Requested end state is **ADUMA for titles** and **ALMONI for body text**. No verified local font file or web embedding licence was found. Do not download, convert or commit a desktop font without explicit webfont redistribution permission. Once licensed `.woff2` files are supplied, place them in:
+**ADUMA for titles and ALMONI for body text are now in use in the generated concept documents.** The licensed files live at `F:\CLAWY_RECOVERY\06_Fonts\User_Fonts` (`AdumaFOT-*.otf`, `almoni-neue-aaa-*.otf`) and are installed for the current Windows user. The document build embeds them into each PDF, which is ordinary font embedding, not web redistribution.
+
+They are **not** used for the site interface, and no font file is committed to this repository. Serving them as webfonts is a separate question that still needs an explicit web embedding licence. If that licence is obtained, place `.woff2` files in:
 
 ```text
 public/fonts/aduma-<weight>.woff2
