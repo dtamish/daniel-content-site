@@ -7,6 +7,7 @@ import {
   assertLocale,
   conceptIdentity,
   parseConceptManifest,
+  planConceptSync,
   resolveActingEditor,
 } from '../tools/concept-admin-core.mjs';
 
@@ -93,6 +94,40 @@ test('the prepared Hebrew package parses as 22 Hebrew concepts', async () => {
   assert.equal(plan.length, 22);
   assert.ok(plan.every((concept) => concept.locale === 'he'));
   assert.ok(plan.every((concept) => concept.sourceId));
+});
+
+test('a sync pairs the package with existing records and never invents one', () => {
+  const plan = parseConceptManifest({
+    items: [item({ title: 'קיים' }), item({ title: 'חדש' })],
+  });
+  const existing = [
+    { id: 'a', title: 'קיים', locale: 'he', banner_path: 'a/banner.png', pdf_path: 'a/concept.pdf' },
+    { id: 'b', title: 'לא בחבילה', locale: 'he', banner_path: 'b/banner.png', pdf_path: 'b/concept.pdf' },
+  ];
+  const { matched, missing, untouched } = planConceptSync(plan, existing);
+
+  assert.deepEqual(matched.map(({ row }) => row.id), ['a']);
+  assert.deepEqual(missing, ['חדש']);
+  assert.deepEqual(untouched, ['לא בחבילה']);
+});
+
+test('a sync will not match a record in another language', () => {
+  const plan = parseConceptManifest({ locale: 'en', items: [item({ title: 'Values Arena' })] });
+  const existing = [
+    { id: 'a', title: 'Values Arena', locale: 'he', banner_path: 'a/banner.png', pdf_path: 'a/concept.pdf' },
+  ];
+  const { matched, missing } = planConceptSync(plan, existing);
+
+  assert.equal(matched.length, 0);
+  assert.deepEqual(missing, ['Values Arena']);
+});
+
+test('a sync refuses a record that has no asset path to overwrite', () => {
+  const plan = parseConceptManifest({ items: [item({ title: 'ללא נכס' })] });
+  assert.throws(
+    () => planConceptSync(plan, [{ id: 'a', title: 'ללא נכס', locale: 'he', banner_path: null, pdf_path: null }]),
+    /asset path/i,
+  );
 });
 
 test('acting editor selection refuses ambiguity instead of attributing changes to the wrong person', () => {

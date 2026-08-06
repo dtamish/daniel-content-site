@@ -23,6 +23,11 @@ $$;
 
 revoke all on function public.stamp_review_creation() from public;
 
+-- Dropped first so the whole file can be re-run safely; CREATE TRIGGER has no IF NOT EXISTS.
+drop trigger if exists reviews_stamp_creation on public.reviews;
+drop trigger if exists reviews_prevent_update on public.reviews;
+drop trigger if exists reviews_prevent_delete on public.reviews;
+
 create trigger reviews_stamp_creation
 before insert on public.reviews
 for each row execute function public.stamp_review_creation();

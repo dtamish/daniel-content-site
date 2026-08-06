@@ -3,7 +3,7 @@ import { readFile, stat, writeFile } from 'node:fs/promises';
 import { isAbsolute, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { createClient } from '@supabase/supabase-js';
-import { assertDecision, assertDeleteConfirmation, assertLocale, conceptIdentity, parseConceptManifest, resolveActingEditor } from './concept-admin-core.mjs';
+import { assertDecision, assertDeleteConfirmation, assertLocale, conceptIdentity, parseConceptManifest, planConceptSync, resolveActingEditor } from './concept-admin-core.mjs';
 
 const root = resolve(import.meta.dirname, '..');
 const secretPath = process.env.CONCEPT_ADMIN_ENV ?? resolve(root, '.secrets', 'concept-admin.env');
@@ -13,6 +13,7 @@ function usage() {
   node tools/concept-admin.mjs list
   node tools/concept-admin.mjs find <text>
   node tools/concept-admin.mjs import <folder> [--locale he|en] [--publish]
+  node tools/concept-admin.mjs sync <folder> [--locale he|en] [--apply]
   node tools/concept-admin.mjs set <concept-id> [--status draft|published] [--section queue|library] [--priority 0..9999]
   node tools/concept-admin.mjs review <concept-id> --decision priority-approved|schedule-approved|wait|canceled [--notes <text>]
   node tools/concept-admin.mjs fetch <concept-id> --asset banner|pdf --out <file>
@@ -120,6 +121,55 @@ async function importBundle(client, config, folder, publish, localeOverride) {
   return report;
 }
 
+/**
+ * Replaces the assets and copy of concepts that already exist, in place.
+ * Storage objects are overwritten at their existing paths, so no record id,
+ * path or review linkage changes. Defaults to a dry run.
+ */
+async function syncBundle(client, folder, localeOverride, apply) {
+  const manifest = JSON.parse(await readFile(resolve(folder, 'manifest.json'), 'utf8'));
+  const plan = parseConceptManifest(manifest, { locale: localeOverride });
+  const { data: existing, error } = await client
+    .from('concepts')
+    .select('id,title,locale,banner_path,pdf_path');
+  if (error) throw error;
+
+  const { matched, missing, untouched } = planConceptSync(plan, existing ?? []);
+  const report = {
+    mode: apply ? 'applied' : 'dry-run',
+    locale: plan[0]?.locale ?? null,
+    willRefresh: matched.length,
+    missingFromCatalogue: missing,
+    untouchedInCatalogue: untouched,
+    refreshed: [],
+    failed: [],
+  };
+  if (!apply) return report;
+
+  for (const { item, row } of matched) {
+    const bannerFile = resolve(folder, item.banner);
+    const pdfFile = resolve(folder, item.pdf);
+    await Promise.all([requireFile(bannerFile), requireFile(pdfFile)]);
+    try {
+      const [banner, pdf] = await Promise.all([
+        client.storage.from('concept-banners').upload(row.banner_path, await readFile(bannerFile), { contentType: 'image/png', upsert: true }),
+        client.storage.from('concept-pdfs').upload(row.pdf_path, await readFile(pdfFile), { contentType: 'application/pdf', upsert: true }),
+      ]);
+      if (banner.error) throw banner.error;
+      if (pdf.error) throw pdf.error;
+      const { error: updateError } = await client.from('concepts').update({
+        description: item.description || item.title,
+        priority: item.priority,
+      }).eq('id', row.id);
+      if (updateError) throw updateError;
+      report.refreshed.push({ id: row.id, title: item.title, locale: item.locale });
+    } catch (cause) {
+      report.failed.push({ title: item.title, error: cause instanceof Error ? cause.message : String(cause) });
+    }
+  }
+  return report;
+}
+
 const [command, target, ...args] = process.argv.slice(2);
 if (!command) usage();
 const { client, config } = await adminClient();
@@ -139,6 +189,11 @@ if (command === 'list') {
   const localeOverride = option(args, '--locale');
   if (localeOverride !== undefined) assertLocale(localeOverride, 'Import locale');
   output(await importBundle(client, config, target, args.includes('--publish'), localeOverride));
+} else if (command === 'sync') {
+  if (!target) usage();
+  const syncLocale = option(args, '--locale');
+  if (syncLocale !== undefined) assertLocale(syncLocale, 'Sync locale');
+  output(await syncBundle(client, target, syncLocale, args.includes('--apply')));
 } else if (command === 'set') {
   if (!target) usage();
   const patch = {};
