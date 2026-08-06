@@ -175,7 +175,6 @@ test('404 output does not advertise itself as a canonical or social URL', () => 
 test('concept review home exposes the focused review flow and exactly four decisions', () => {
   const home = readFileSync(join(dist, 'index.html'), 'utf8');
 
-  assert.match(home, /<h1>מה ממשיכים להפיק\?<\/h1>/);
   assert.match(home, /data-concept-grid/);
   assert.match(home, /מאושר להפקה ולקדם במיידי/);
   assert.match(home, /מאושר להפקה בסדר לוח השידורים/);
@@ -184,21 +183,48 @@ test('concept review home exposes the focused review flow and exactly four decis
   assert.equal((home.match(/name="decision"/g) ?? []).length, 4);
 });
 
-test('concept reader delegates to the browser PDF viewer and keeps the decision separate', () => {
+test('the room offers exactly three review tabs and no side drawer', () => {
   const home = readFileSync(join(dist, 'index.html'), 'utf8');
 
-  assert.match(home, /כל קונספט נפתח בקורא ה־PDF הטבעי של הדפדפן/);
-  assert.match(home, /data-decision-dialog/);
-  assert.doesNotMatch(home, /data-reading-progress|data-document-viewer/);
+  assert.match(home, /data-tab="pending"/);
+  assert.match(home, /data-tab="approved"/);
+  assert.match(home, /data-tab="rejected"/);
+  assert.equal((home.match(/data-tab="/g) ?? []).length, 3);
+  assert.doesNotMatch(home, /data-drawer|data-open-drawer|filter-drawer/);
 });
 
-test('first visit starts with one optional guided introduction, not an identity wall', () => {
+test('the reader pages a rendered document and ends on the decision', () => {
+  const home = readFileSync(join(dist, 'index.html'), 'utf8');
+  const reviewScript = readFileSync(join(root, 'src/scripts/review-app.ts'), 'utf8');
+
+  assert.match(home, /data-page-canvas/);
+  assert.match(home, /data-decision-slide/);
+  assert.match(home, /data-prev/);
+  assert.match(home, /data-next/);
+  // The document is rendered in-app; it is no longer handed to an embedded browser viewer.
+  assert.doesNotMatch(home, /data-reader-frame|<iframe/);
+  assert.match(reviewScript, /pdfjs\.getDocument\(/);
+  assert.match(reviewScript, /pointerdown/);
+  assert.match(reviewScript, /view = target/);
+});
+
+test('opening the room asks who is reviewing instead of running an onboarding tour', () => {
   const home = readFileSync(join(dist, 'index.html'), 'utf8');
 
-  assert.match(home, /data-welcome-dialog/);
-  assert.match(home, /data-tutorial-dialog/);
-  assert.match(home, /התחלה קצרה/);
-  assert.match(home, /data-skip-tutorial/);
+  assert.match(home, /data-identity-dialog/);
+  assert.doesNotMatch(home, /data-welcome-dialog|data-tutorial-dialog|data-skip-tutorial/);
+});
+
+test('the language switch swaps interface, catalogue and document together', () => {
+  const home = readFileSync(join(dist, 'index.html'), 'utf8');
+  const reviewScript = readFileSync(join(root, 'src/scripts/review-app.ts'), 'utf8');
+  const repository = readFileSync(join(root, 'src/lib/concept-repository.ts'), 'utf8');
+
+  assert.match(home, /data-locale-toggle/);
+  assert.match(reviewScript, /document\.documentElement\.dir = direction\(locale\)/);
+  assert.match(reviewScript, /if \(!el\.reader\.hidden\) closeReader\(\);/);
+  assert.match(reviewScript, /loadCatalogue\(\)/);
+  assert.match(repository, /\.eq\('locale', locale\)/);
 });
 
 test('admin output makes editor authentication and upload scope explicit', () => {
@@ -232,32 +258,25 @@ test('admin can explicitly publish imported drafts after review', () => {
   assert.match(adminScript, /publication_status.*published/);
 });
 
-test('reader preview opens in a focused dialog and can expand to the browser PDF viewer', () => {
+test('closing the reader releases the signed document URL', () => {
   const reviewScript = readFileSync(join(root, 'src/scripts/review-app.ts'), 'utf8');
-  const reviewApp = readFileSync(join(root, 'src/components/ReviewApp.astro'), 'utf8');
-  const styles = readFileSync(join(root, 'src/styles/global.css'), 'utf8');
 
-  assert.match(reviewScript, /showModal\(\)/);
-  assert.match(reviewScript, /window\.open\(activeConcept\.pdfUrl, '_blank', 'noopener,noreferrer'\)/);
-  assert.doesNotMatch(reviewScript, /pdfjsLib|getDocument\(/);
-  assert.match(reviewScript, /compactDescription\(concept\.description\)/);
-  assert.match(reviewApp, /data-reader-dialog/);
-  assert.match(reviewApp, /data-reader-frame/);
-  assert.match(reviewApp, />תפריט</);
-  assert.match(styles, /color-scheme: dark/);
-  assert.match(styles, /--paper: #0b0d0f/);
+  assert.match(reviewScript, /function closeReader\(\)/);
+  assert.match(reviewScript, /loadingTask\?\.destroy\(\)/);
+  assert.match(reviewScript, /pdf = null;/);
+  assert.match(reviewScript, /el\.canvas\.width = 0;/);
 });
 
-test('concept cards preserve source banners and the reader preserves PDF aspect ratio', () => {
+test('concept cards preserve the source banner composition', () => {
   const reviewScript = readFileSync(join(root, 'src/scripts/review-app.ts'), 'utf8');
-  const styles = readFileSync(join(root, 'src/styles/global.css'), 'utf8');
+  const styles = readFileSync(join(root, 'src/styles/room.css'), 'utf8');
+  const globals = readFileSync(join(root, 'src/styles/global.css'), 'utf8');
 
   assert.match(reviewScript, /image\.loading = 'lazy'/);
   assert.match(reviewScript, /image\.decoding = 'async'/);
-  assert.doesNotMatch(reviewScript, /canvas\.style\.height/);
-  assert.doesNotMatch(reviewScript, /createElement\('div', 'concept-meta'\)/);
   assert.match(styles, /aspect-ratio: 1785 \/ 690/);
-  assert.doesNotMatch(styles, /max-height: 82vh/);
+  assert.match(globals, /color-scheme: dark/);
+  assert.match(globals, /--accent: #ff7a1a/);
 });
 
 test('draft content cannot leak into public output', () => {
