@@ -44,7 +44,10 @@ SINAI Concept Room is a fast review surface for concept documents. Its job is to
 - The verified Hebrew range map is in the private import package at `C:\Users\dtami\Documents\Sinai Concept Review Import\manifest.json`. Important multi-page examples: Abraham 21–24, Esther 25–28, Moses 29–31, Ruth 32–34. Do not split continuation pages.
 - English source book: `C:\Users\dtami\Downloads\Telegram Desktop\SINAI_Concept_Book_Long_English_Illustrated.pdf`
 - The supplied English source contains 18 direct concept documents, not 22. It has no standalone equivalents for `abraham`, `esther`, `moses`, or `ruth`. Do not invent English PDFs or silently mix languages.
-- Private English import package (not public, not GitHub): `C:\Users\dtami\Documents\Sinai Concept Review Import English\`.
+- Private English import package (not public, not GitHub): `C:\Users\dtami\Documents\Sinai Concept Review Import English v2\` — 18 concepts, imported and published 2026-08-06. The `v2` package keeps the supplied PDFs unchanged and corrects only their metadata: 13 of the 18 titles in the original package were rewritten labels rather than the documents' own titles, and five of those named a different concept that also exists in the catalogue.
+- **The Hebrew/English mapping is printed in the source.** Every opening page of the English book carries its Hebrew concept number, stored as `concept_number` in the English manifest. It is what confirms that `abraham`, `esther`, `moses` and `ruth` genuinely have no English document.
+- The English documents are the originally supplied files, deliberately not re-typeset; their text still has the broken flow that was repaired on the Hebrew side.
+- Live state as of 2026-08-06: 22 published Hebrew concepts, 18 published English concepts, 0 reviews.
 
 ---
 
@@ -205,9 +208,11 @@ Then define accurate `@font-face` rules in `global.css`, use `font-display: swap
 **Status warning:** migration files in this repository are not proof they have run in the hosted project. Before deploying code that depends on them, inspect the Supabase SQL Editor/schema and apply missing migrations once, in filename order:
 
 1. `202608050001_concept_approval.sql` — only if base schema does not already exist. Do not blindly rerun it if tables exist.
-2. `20260805170000_concept_review.sql`
-3. `202608060002_bilingual_concepts.sql`
-4. `202608060003_append_only_reviews.sql`
+2. `202608060002_bilingual_concepts.sql` — **applied and verified 2026-08-06**.
+3. `202608060003_append_only_reviews.sql` — **applied and verified 2026-08-06**.
+
+There are three migration files, not four. Earlier revisions of this document named a
+`20260805170000_concept_review.sql`; no such file exists or is tracked.
 
 Verify after each: table columns, indexes, policies, triggers and bucket privacy. In particular, prove an UPDATE/DELETE of a review is rejected and an INSERT records the server timestamp.
 
