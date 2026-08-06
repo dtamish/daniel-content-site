@@ -5,6 +5,57 @@ export const DECISIONS = Object.freeze({
   canceled: 'לא מאושר להפקה — לבטל רעיון',
 });
 
+const DECISIONS_EN = Object.freeze({
+  'priority-approved': 'Approved — fast-track production',
+  'schedule-approved': 'Approved — schedule in the normal slate',
+  wait: 'Hold for now',
+  canceled: 'Not approved — drop the idea',
+});
+
+/** Decision labels are content, so they are translated, while the stored keys never change. */
+export function decisionLabels(locale = 'he') {
+  return locale === 'en' ? DECISIONS_EN : DECISIONS;
+}
+
+export function decisionLabel(decision, locale = 'he') {
+  return decisionLabels(locale)[decision] ?? decision;
+}
+
+/** The three review tabs. A concept sits in exactly one of them. */
+export const STATUSES = Object.freeze(['pending', 'approved', 'rejected']);
+
+const STATUS_OF_DECISION = Object.freeze({
+  'priority-approved': 'approved',
+  'schedule-approved': 'approved',
+  wait: 'pending',
+  canceled: 'rejected',
+});
+
+export function latestReview(reviews = []) {
+  let latest = null;
+  for (const review of reviews) {
+    if (!latest || new Date(review.createdAt).valueOf() >= new Date(latest.createdAt).valueOf()) {
+      latest = review;
+    }
+  }
+  return latest;
+}
+
+export function conceptStatus(concept) {
+  const latest = latestReview(concept?.reviews);
+  return latest ? STATUS_OF_DECISION[latest.decision] ?? 'pending' : 'pending';
+}
+
+export function countByStatus(concepts = []) {
+  const counts = { pending: 0, approved: 0, rejected: 0 };
+  for (const concept of concepts) counts[conceptStatus(concept)] += 1;
+  return counts;
+}
+
+export function conceptsWithStatus(concepts = [], status) {
+  return concepts.filter((concept) => conceptStatus(concept) === status);
+}
+
 export const MAX_DESCRIPTION_LENGTH = 500;
 
 export function isDecision(value) {
