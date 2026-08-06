@@ -1,5 +1,5 @@
 import { demoConcepts } from '../data/demo-concepts.mjs';
-import { filterConceptsByLatestDecision } from '../lib/review-state.mjs';
+import { DECISIONS, filterConceptsByLatestDecision, getReviewerBadges } from '../lib/review-state.mjs';
 import { isSupabaseConfigured, loadConcepts, saveReview, type Identity } from '../lib/concept-repository';
 
 type Review = { reviewerId: string; reviewerName: string; decision: string; createdAt: string };
@@ -53,6 +53,12 @@ if (app) {
       const article = create('article', 'concept-card'); const pdf = create('button', 'concept-card-button'); pdf.type = 'button'; pdf.setAttribute('aria-label', `פתיחת PDF: ${concept.title}`); pdf.addEventListener('click', () => openPdf(concept));
       const banner = create('div', `concept-banner fallback-${(concept.priority % 3) + 1}`); if (concept.bannerUrl) { const image = create('img'); image.src = concept.bannerUrl; image.alt = ''; image.loading = 'lazy'; image.decoding = 'async'; banner.replaceChildren(image); } else { banner.append(create('span', 'banner-label', 'קונספט')); }
       const body = create('div', 'concept-card-body'); body.append(create('h3', '', concept.title), create('p', 'concept-description', compactDescription(concept.description)));
+      const badges = create('div', 'reviewer-badges');
+      for (const review of getReviewerBadges(concept.reviews)) badges.append(create('span', 'review-badge', `${review.reviewerName}: ${DECISIONS[review.decision as keyof typeof DECISIONS] ?? review.decision}`));
+      if (badges.childElementCount) body.append(badges);
+      const history = create('details', 'review-history'); const summary = create('summary', '', `היסטוריית החלטות (${concept.reviews.length})`); const historyList = create('ul');
+      for (const review of [...concept.reviews].sort((a, b) => b.createdAt.localeCompare(a.createdAt))) historyList.append(create('li', '', `${review.reviewerName} · ${DECISIONS[review.decision as keyof typeof DECISIONS] ?? review.decision} · ${new Date(review.createdAt).toLocaleDateString('he-IL')}`));
+      history.append(summary, historyList); if (concept.reviews.length) body.append(history);
       const footer = create('div', 'card-footer'); footer.append(create('span', 'pdf-cue', 'PDF ↗'));
       const decision = create('button', 'decision-trigger', 'קביעת החלטה'); decision.type = 'button'; decision.addEventListener('click', () => openDecision(concept)); footer.append(decision);
       pdf.append(banner, body); article.append(pdf, footer); grid.append(article);

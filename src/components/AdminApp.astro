@@ -57,6 +57,10 @@ import { withBase } from '../lib/urls';
           <p>בחרו את תיקיית חבילת הייבוא הכוללת את <code>manifest.json</code>, תיקיית <code>pdf</code> ותיקיית <code>banners</code>. המערכת בודקת הכול לפני שמתחילה, ומדלגת על קונספט שכבר קיים.</p>
         </div>
         <form data-bulk-import-form>
+          <div class="field">
+            <label for="bulk-import-locale">שפת החבילה</label>
+            <select id="bulk-import-locale" name="locale"><option value="he">עברית</option><option value="en">English</option></select>
+          </div>
           <label class="upload-box bulk-folder" for="bulk-import-folder">
             <span class="upload-icon" aria-hidden="true">↥</span>
             <span><b>בחירת תיקיית ייבוא</b><small>Chrome או Edge · לא נשלחים קבצים שלא מופיעים במניפסט</small></span>

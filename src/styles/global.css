@@ -414,9 +414,13 @@
   .pdf-cue { color: var(--accent); font-size: .78rem; font-weight: 800; letter-spacing: .08em; direction: ltr; }
   .decision-trigger { min-height: 34px; padding-inline: .7rem; border: 1px solid var(--line); border-radius: 999px; background: transparent; color: var(--ink); font-size: .78rem; font-weight: 700; }
   .decision-trigger:hover { color: #0b0d0f; border-color: var(--accent); background: var(--accent); }
-  .reviewer-badges { display: none; }
+  .reviewer-badges { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .85rem; }
+  .review-badge { padding: .25rem .5rem; border: 1px solid var(--line); border-radius: 999px; color: var(--ink); font-size: .76rem; }
+  .review-history { margin-top: .75rem; color: var(--muted); font-size: .82rem; }
+  .review-history summary { cursor: pointer; color: var(--ink); }
+  .review-history ul { margin: .55rem 0 0; padding-inline-start: 1.2rem; }
   .drawer-scrim { background: rgba(0,0,0,.7); backdrop-filter: blur(5px); }
-  .filter-drawer { inset: 0 auto 0 0; width: min(88vw, 390px); border: 0; border-inline-end: 1px solid var(--line); background: #101315; box-shadow: 20px 0 55px rgba(0,0,0,.5); }
+  .filter-drawer { inset: 0 0 0 auto; width: min(88vw, 390px); border: 0; border-inline-start: 1px solid var(--line); background: #101315; box-shadow: -20px 0 55px rgba(0,0,0,.5); }
   .drawer-header { border-bottom-color: var(--soft-line); }
   .filter-list button { border-bottom-color: var(--soft-line); color: var(--ink); }
   .filter-list button span:last-child { background: var(--surface); color: var(--muted); }
