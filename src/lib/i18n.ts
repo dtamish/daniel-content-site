@@ -25,6 +25,7 @@ type Strings = {
   identityAdvisorName: string;
   people: Record<'honi' | 'itzik' | 'advisor' | 'editor', string>;
   tabs: Record<'pending' | 'approved' | 'rejected', string>;
+  categories: Record<'film-long' | 'film-short' | 'film' | 'series' | 'digital' | 'podcast', string>;
   empty: Record<'pending' | 'approved' | 'rejected', string>;
   open: string;
   close: string;
@@ -74,6 +75,14 @@ const he: Strings = {
   identityAdvisorName: 'שם היועץ/ת',
   people: { honi: 'חוני', itzik: 'איציק', advisor: 'יועץ/ת', editor: 'עורך/ת תוכן' },
   tabs: { pending: 'ממתינים', approved: 'מאושרים', rejected: 'נדחו' },
+  categories: {
+    'film-long': 'סרט ארוך · 30 דק׳',
+    'film-short': 'סרט קצר',
+    film: 'סרט',
+    series: 'סדרה',
+    digital: 'דיגיטל ורטיקלי',
+    podcast: 'פודקאסט',
+  },
   empty: {
     pending: 'אין קונספטים שממתינים להחלטה.',
     approved: 'עוד לא אושר אף קונספט.',
@@ -127,6 +136,14 @@ const en: Strings = {
   identityAdvisorName: 'Advisor name',
   people: { honi: 'Honi', itzik: 'Itzik', advisor: 'Advisor', editor: 'Content editor' },
   tabs: { pending: 'Pending', approved: 'Approved', rejected: 'Declined' },
+  categories: {
+    'film-long': 'Long film · 30 min',
+    'film-short': 'Short film',
+    film: 'Film',
+    series: 'Series',
+    digital: 'Vertical digital',
+    podcast: 'Podcast',
+  },
   empty: {
     pending: 'Nothing is waiting for a decision.',
     approved: 'No concept has been approved yet.',

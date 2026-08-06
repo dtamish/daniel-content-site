@@ -44,6 +44,7 @@ test('manifest parsing creates an immutable import plan from a valid item', () =
     description: 'תיאור קצר',
     priority: 7,
     locale: 'he',
+    category: 'series',
     sourceId: null,
     banner: 'banners/example.png',
     pdf: 'pdf/example.pdf',
@@ -128,6 +129,15 @@ test('a sync refuses a record that has no asset path to overwrite', () => {
     () => planConceptSync(plan, [{ id: 'a', title: 'ללא נכס', locale: 'he', banner_path: null, pdf_path: null }]),
     /asset path/i,
   );
+});
+
+test('a concept carries a content type from a fixed vocabulary', async () => {
+  const { assertCategory } = await import('../tools/concept-admin-core.mjs');
+  assert.equal(assertCategory('podcast'), 'podcast');
+  assert.equal(parseConceptManifest({ items: [item({ category_key: 'digital' })] })[0].category, 'digital');
+  assert.equal(parseConceptManifest({ items: [item()] })[0].category, 'series');
+  assert.throws(() => assertCategory('documentary'), /category/i);
+  assert.throws(() => parseConceptManifest({ items: [item({ category_key: 'reels' })] }), /category/i);
 });
 
 test('acting editor selection refuses ambiguity instead of attributing changes to the wrong person', () => {

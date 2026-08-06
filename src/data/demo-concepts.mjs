@@ -6,6 +6,7 @@
 const he = [
   {
     id: 'future-of-work',
+    category: 'series',
     title: 'כשהעבודה עוברת לצד השני של המסך',
     description: 'סדרת מפגשים קצרה עם אנשים שכבר עובדים לצד סוכנים חכמים — החלטות קטנות, הרגלים חדשים, ומה עדיין נשאר אנושי.',
     section: 'queue',
@@ -19,6 +20,7 @@ const he = [
   },
   {
     id: 'one-street',
+    category: 'film',
     title: 'רחוב אחד, מאה שנים',
     description: 'פורמט ארכיוני־עכשווי שמרכיב היסטוריה מקומית דרך רחוב יחיד: חלונות ראווה, דיירים, קולות והחלטות ששינו את המרחב.',
     section: 'queue',
@@ -32,6 +34,7 @@ const he = [
   },
   {
     id: 'night-shift',
+    category: 'digital',
     title: 'משמרת לילה',
     description: 'דיוקנאות שקטים של האנשים שמחזיקים את העיר ערה בזמן שרובנו ישנים — מבקרת רכבות, אופה, רופא ומפעילת חדר בקרה.',
     section: 'library',
@@ -43,6 +46,7 @@ const he = [
   },
   {
     id: 'quiet-archive',
+    category: 'podcast',
     title: 'הארכיון השקט',
     description: 'סדרה קצרה על חומרים שנשמרו במקרה — קלטות, מכתבים וסלילים שמספרים סיפור אחר על אותה תקופה.',
     section: 'library',
@@ -59,6 +63,7 @@ const he = [
 const en = [
   {
     id: 'future-of-work',
+    category: 'series',
     title: 'When Work Moves to the Other Side of the Screen',
     description: 'A short documentary series about people already working alongside capable agents — small decisions, new habits, and what stays human.',
     section: 'queue',
@@ -72,6 +77,7 @@ const en = [
   },
   {
     id: 'one-street',
+    category: 'film',
     title: 'One Street, a Hundred Years',
     description: 'An archive-meets-present format that assembles local history through a single street: shopfronts, residents, voices and the decisions that reshaped it.',
     section: 'queue',
@@ -85,6 +91,7 @@ const en = [
   },
   {
     id: 'night-shift',
+    category: 'digital',
     title: 'Night Shift',
     description: 'Quiet portraits of the people who keep the city awake while most of us sleep — a train inspector, a baker, a doctor, a control-room operator.',
     section: 'library',

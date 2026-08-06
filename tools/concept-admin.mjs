@@ -102,6 +102,7 @@ async function importBundle(client, config, folder, publish, localeOverride) {
         description: item.description || item.title,
         priority: item.priority,
         locale: item.locale,
+        category: item.category,
         section: 'queue',
         publication_status: publish ? 'published' : 'draft',
         banner_path: bannerPath,
@@ -160,6 +161,7 @@ async function syncBundle(client, folder, localeOverride, apply) {
       const { error: updateError } = await client.from('concepts').update({
         description: item.description || item.title,
         priority: item.priority,
+        category: item.category,
       }).eq('id', row.id);
       if (updateError) throw updateError;
       report.refreshed.push({ id: row.id, title: item.title, locale: item.locale });

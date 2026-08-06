@@ -1,7 +1,8 @@
 import * as pdfjs from 'pdfjs-dist';
 import workerUrl from 'pdfjs-dist/build/pdf.worker.mjs?url';
 import {
-  conceptStatus, countByStatus, conceptsWithStatus, decisionLabels, latestReview,
+  CATEGORY_COLOURS, conceptCategory, conceptStatus, countByStatus, conceptsWithStatus,
+  decisionLabels, groupByCategory, latestReview,
 } from '../lib/review-state.mjs';
 import { DEFAULT_LOCALE, STRINGS, direction, isLocale, type Locale } from '../lib/i18n';
 import { isSupabaseConfigured, loadConcepts, saveReview, type Identity } from '../lib/concept-repository';
@@ -11,7 +12,7 @@ pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
 
 type Review = { reviewerId: string; reviewerName: string; decision: string; notes?: string; createdAt: string };
 type Concept = {
-  id: string; title: string; description: string; priority: number;
+  id: string; title: string; description: string; priority: number; category: string;
   bannerUrl: string; pdfUrl: string; reviews: Review[];
 };
 type Status = 'pending' | 'approved' | 'rejected';
@@ -231,9 +232,26 @@ if (appRoot) {
     el.empty.textContent = strings.empty[tab];
 
     const labels = decisionLabels(locale);
+    for (const { category, items } of groupByCategory(visible)) {
+      const colour = CATEGORY_COLOURS[category as keyof typeof CATEGORY_COLOURS];
+      const section = create('section', 'group');
+      section.style.setProperty('--group', colour);
+      const head = create('h2', 'group-head');
+      head.append(create('span', 'group-dot'),
+                  create('span', 'group-name', strings.categories[category as keyof typeof strings.categories]),
+                  create('b', 'group-count', String(items.length)));
+      const row = create('div', 'group-grid');
+      section.append(head, row);
+      el.grid.append(section);
+      renderCards(items, row, labels, colour);
+    }
+  }
+
+  function renderCards(visible: Concept[], target: HTMLElement, labels: Record<string, string>, colour: string) {
     for (const concept of visible) {
       const status = conceptStatus(concept);
       const article = create('article', 'card');
+      article.style.setProperty('--group', colour);
       const card = create('button', 'card-open');
       card.type = 'button';
       card.addEventListener('click', () => openReader(concept));
@@ -294,7 +312,7 @@ if (appRoot) {
         article.append(actions);
       }
 
-      el.grid.append(article);
+      target.append(article);
     }
   }
 

@@ -12,6 +12,19 @@ type DatabaseReview = {
   profiles: { display_name: string } | { display_name: string }[] | null;
 };
 
+type ConceptRow = {
+  id: string;
+  title: string;
+  description: string;
+  section: string;
+  priority: number;
+  locale?: string | null;
+  category?: string | null;
+  banner_path: string | null;
+  pdf_path: string | null;
+  reviews: DatabaseReview[] | null;
+};
+
 const ANONYMOUS_REVIEWER = { he: 'סוקר/ת', en: 'Reviewer' } as const;
 
 async function signedMediaUrl(bucket: string, path: string | null) {
@@ -30,24 +43,35 @@ export async function loadConcepts(locale: Locale = DEFAULT_LOCALE) {
   const client = getSupabaseClient();
   if (!client) return structuredClone(demoConceptsByLocale[locale] ?? demoConceptsByLocale[DEFAULT_LOCALE]);
 
-  const { data, error } = await client
+  const REVIEWS = 'reviews(reviewer_id,decision,notes,created_at,profiles(display_name))';
+  const BASE = 'id,title,description,section,priority,locale,banner_path,pdf_path';
+
+  const query = (columns: string) => client
     .from('concepts')
-    .select('id,title,description,section,priority,locale,banner_path,pdf_path,reviews(reviewer_id,decision,notes,created_at,profiles(display_name))')
+    .select(columns)
     .eq('publication_status', 'published')
     .eq('locale', locale)
     .order('priority', { ascending: true });
-  if (error) throw error;
 
-  return Promise.all((data ?? []).map(async (concept) => ({
+  // The category column arrives with its own migration. Until that has been applied the
+  // catalogue still loads, ungrouped, rather than the whole room failing to open.
+  let { data, error } = await query(`${BASE},category,${REVIEWS}`);
+  if (error?.code === '42703') ({ data, error } = await query(`${BASE},${REVIEWS}`));
+  if (error) throw error;
+  // A select built at runtime cannot be inferred, so the row shape is stated here.
+  const rows = (data ?? []) as unknown as ConceptRow[];
+
+  return Promise.all(rows.map(async (concept) => ({
     id: concept.id,
     title: concept.title,
     description: concept.description,
     section: concept.section,
     priority: concept.priority,
     locale: (concept.locale ?? locale) as Locale,
+    category: concept.category ?? 'series',
     bannerUrl: await signedMediaUrl('concept-banners', concept.banner_path),
     pdfUrl: await signedMediaUrl('concept-pdfs', concept.pdf_path),
-    reviews: ((concept.reviews ?? []) as DatabaseReview[]).map((review) => ({
+    reviews: (concept.reviews ?? []).map((review) => ({
       reviewerId: review.reviewer_id,
       reviewerName: Array.isArray(review.profiles)
         ? review.profiles[0]?.display_name ?? ANONYMOUS_REVIEWER[locale]

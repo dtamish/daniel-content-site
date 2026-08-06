@@ -123,7 +123,31 @@
     color: var(--muted);
     font-size: 0.82rem;
   }
-  .room-grid {
+  .room-grid { display: grid; gap: clamp(1.4rem, 4vw, 2.1rem); }
+  .group-head {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    margin-block-end: 0.75rem;
+    font-size: 0.92rem;
+    font-weight: 600;
+    color: var(--ink);
+  }
+  .group-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 3px;
+    background: var(--group);
+  }
+  .group-count {
+    min-width: 1.3rem;
+    padding: 0.05rem 0.4rem;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--group) 20%, transparent);
+    color: var(--group);
+    font-size: 0.72rem;
+  }
+  .group-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr));
     gap: clamp(0.75rem, 2.4vw, 1.15rem);
@@ -139,7 +163,8 @@
     background: var(--surface);
     transition: border-color 0.18s ease, transform 0.18s ease;
   }
-  .card:hover { border-color: var(--accent); transform: translateY(-2px); }
+  .card { border-block-start: 3px solid var(--group, var(--line)); }
+  .card:hover { border-color: var(--group, var(--accent)); transform: translateY(-2px); }
   .card-open {
     display: flex;
     flex-direction: column;

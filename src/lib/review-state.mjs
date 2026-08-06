@@ -21,6 +21,35 @@ export function decisionLabel(decision, locale = 'he') {
   return decisionLabels(locale)[decision] ?? decision;
 }
 
+/**
+ * Content types, in the order the board presents them. Each has a colour so the board
+ * reads as groups at a glance. 'film' holds the standalone documentaries until someone
+ * decides which are short and which run thirty minutes.
+ */
+export const CATEGORIES = Object.freeze(['film-long', 'film-short', 'film', 'series', 'digital', 'podcast']);
+
+export const CATEGORY_COLOURS = Object.freeze({
+  'film-long': '#b98cff',
+  'film-short': '#6aa9ff',
+  film: '#8fa3bd',
+  series: '#ff7a1a',
+  digital: '#35c9a8',
+  podcast: '#ffc861',
+});
+
+export function conceptCategory(concept) {
+  const value = concept?.category;
+  return CATEGORIES.includes(value) ? value : 'series';
+}
+
+/** Concepts grouped by content type, keeping the board's fixed category order. */
+export function groupByCategory(concepts = []) {
+  const groups = new Map();
+  for (const category of CATEGORIES) groups.set(category, []);
+  for (const concept of concepts) groups.get(conceptCategory(concept)).push(concept);
+  return [...groups].filter(([, items]) => items.length).map(([category, items]) => ({ category, items }));
+}
+
 /** The three review tabs. A concept sits in exactly one of them. */
 export const STATUSES = Object.freeze(['pending', 'approved', 'rejected']);
 
