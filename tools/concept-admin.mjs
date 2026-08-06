@@ -3,7 +3,7 @@ import { readFile, stat, writeFile } from 'node:fs/promises';
 import { isAbsolute, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { createClient } from '@supabase/supabase-js';
-import { assertDecision, assertDeleteConfirmation, parseConceptManifest, resolveActingEditor } from './concept-admin-core.mjs';
+import { assertDecision, assertDeleteConfirmation, assertLocale, conceptIdentity, parseConceptManifest, resolveActingEditor } from './concept-admin-core.mjs';
 
 const root = resolve(import.meta.dirname, '..');
 const secretPath = process.env.CONCEPT_ADMIN_ENV ?? resolve(root, '.secrets', 'concept-admin.env');
@@ -12,7 +12,7 @@ function usage() {
   throw new Error(`Usage:
   node tools/concept-admin.mjs list
   node tools/concept-admin.mjs find <text>
-  node tools/concept-admin.mjs import <folder> [--publish]
+  node tools/concept-admin.mjs import <folder> [--locale he|en] [--publish]
   node tools/concept-admin.mjs set <concept-id> [--status draft|published] [--section queue|library] [--priority 0..9999]
   node tools/concept-admin.mjs review <concept-id> --decision priority-approved|schedule-approved|wait|canceled [--notes <text>]
   node tools/concept-admin.mjs fetch <concept-id> --asset banner|pdf --out <file>
@@ -66,19 +66,20 @@ async function requireFile(path) {
   if (!info.isFile()) throw new Error(`Not a file: ${path}`);
 }
 
-async function importBundle(client, config, folder, publish) {
+async function importBundle(client, config, folder, publish, localeOverride) {
   const manifestPath = resolve(folder, 'manifest.json');
   const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
-  const plan = parseConceptManifest(manifest);
+  const plan = parseConceptManifest(manifest, { locale: localeOverride });
   const creator = await actingEditorId(client, config.CONCEPT_ADMIN_CREATED_BY);
-  const { data: existing, error: existingError } = await client.from('concepts').select('id,title');
+  const { data: existing, error: existingError } = await client.from('concepts').select('id,title,locale');
   if (existingError) throw existingError;
-  const existingTitles = new Set((existing ?? []).map((item) => item.title));
-  const report = { imported: [], skipped: [], failed: [] };
+  // A title may exist once per language, so identity is the pair, never the title alone.
+  const taken = new Set((existing ?? []).map((item) => conceptIdentity(item.locale ?? 'he', item.title)));
+  const report = { locale: plan[0]?.locale ?? null, imported: [], skipped: [], failed: [] };
 
   for (const item of plan) {
-    if (existingTitles.has(item.title)) {
-      report.skipped.push(item.title);
+    if (taken.has(conceptIdentity(item.locale, item.title))) {
+      report.skipped.push({ title: item.title, locale: item.locale });
       continue;
     }
     const bannerFile = resolve(folder, item.banner);
@@ -99,6 +100,7 @@ async function importBundle(client, config, folder, publish) {
         title: item.title,
         description: item.description || item.title,
         priority: item.priority,
+        locale: item.locale,
         section: 'queue',
         publication_status: publish ? 'published' : 'draft',
         banner_path: bannerPath,
@@ -106,13 +108,13 @@ async function importBundle(client, config, folder, publish) {
         created_by: creator,
       });
       if (error) throw error;
-      report.imported.push({ id, title: item.title, publication_status: publish ? 'published' : 'draft' });
+      report.imported.push({ id, title: item.title, locale: item.locale, publication_status: publish ? 'published' : 'draft' });
     } catch (error) {
       await Promise.all([
         client.storage.from('concept-banners').remove([bannerPath]),
         client.storage.from('concept-pdfs').remove([pdfPath]),
       ]);
-      report.failed.push({ title: item.title, error: error instanceof Error ? error.message : String(error) });
+      report.failed.push({ title: item.title, locale: item.locale, error: error instanceof Error ? error.message : String(error) });
     }
   }
   return report;
@@ -123,18 +125,20 @@ if (!command) usage();
 const { client, config } = await adminClient();
 
 if (command === 'list') {
-  const { data, error } = await client.from('concepts').select('id,title,section,publication_status,priority,banner_path,pdf_path,updated_at').order('priority');
+  const { data, error } = await client.from('concepts').select('id,title,locale,section,publication_status,priority,banner_path,pdf_path,updated_at').order('priority');
   if (error) throw error;
   output(data);
 } else if (command === 'find') {
   if (!target) usage();
   const query = target.trim().toLocaleLowerCase('he');
-  const { data, error } = await client.from('concepts').select('id,title,section,publication_status,priority,banner_path,pdf_path').order('priority');
+  const { data, error } = await client.from('concepts').select('id,title,locale,section,publication_status,priority,banner_path,pdf_path').order('priority');
   if (error) throw error;
   output((data ?? []).filter((item) => item.title.toLocaleLowerCase('he').includes(query)));
 } else if (command === 'import') {
   if (!target) usage();
-  output(await importBundle(client, config, target, args.includes('--publish')));
+  const localeOverride = option(args, '--locale');
+  if (localeOverride !== undefined) assertLocale(localeOverride, 'Import locale');
+  output(await importBundle(client, config, target, args.includes('--publish'), localeOverride));
 } else if (command === 'set') {
   if (!target) usage();
   const patch = {};

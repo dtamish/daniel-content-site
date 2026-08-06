@@ -99,11 +99,14 @@ if (app) {
     required<HTMLOutputElement>('[data-description-count]').value = `${description.value.length} / 500`;
   });
 
+  type Locale = 'he' | 'en';
+
   type ConceptDraft = {
     title: string;
     description: string;
     section: 'queue' | 'library';
     priority: number;
+    locale: Locale;
     banner: File | null;
     pdf: File | null;
     published: boolean;
@@ -111,14 +114,22 @@ if (app) {
 
   type ImportManifest = {
     concept_count?: number;
+    locale?: string;
     items?: Array<{
       title?: string;
+      description?: string;
       description_draft?: string;
       priority?: number;
+      locale?: string;
       pdf?: string;
       banner?: string;
     }>;
   };
+
+  const asLocale = (value: unknown): Locale => (value === 'en' ? 'en' : 'he');
+
+  // A title may exist once per language, so an existing record is identified by the pair.
+  const conceptIdentity = (locale: string, title: string) => `${locale} ${title.trim()}`;
 
   function validateFiles(banner: File | null, pdf: File | null) {
     if (banner?.size && (banner.type !== 'image/png' || banner.size > 5 * 1024 * 1024)) {
@@ -144,6 +155,7 @@ if (app) {
       description: draft.description,
       section: draft.section,
       priority: draft.priority,
+      locale: draft.locale,
       publication_status: 'draft',
       banner_path: null,
       pdf_path: null,
@@ -192,6 +204,7 @@ if (app) {
         description: description.value.trim(),
         section: data.get('section') === 'library' ? 'library' : 'queue',
         priority: Number(data.get('priority')),
+        locale: asLocale(data.get('locale')),
         banner: banner?.size ? banner : null,
         pdf: pdf?.size ? pdf : null,
         published: Boolean(data.get('published')),
@@ -246,14 +259,17 @@ if (app) {
     let skipped = 0;
     const failures: string[] = [];
     try {
+      const form = new FormData(bulkImportForm);
+      const packageLocale = asLocale(form.get('locale') ?? manifest.locale);
       const titles = items.map((item) => item.title as string);
-      const { data: existing, error: existingError } = await client.from('concepts').select('title').in('title', titles);
+      const { data: existing, error: existingError } = await client.from('concepts').select('title,locale').in('title', titles);
       if (existingError) throw existingError;
-      const existingTitles = new Set((existing ?? []).map((concept) => concept.title));
-      const shouldPublish = Boolean(new FormData(bulkImportForm).get('published'));
+      const taken = new Set((existing ?? []).map((concept) => conceptIdentity(concept.locale ?? 'he', concept.title)));
+      const shouldPublish = Boolean(form.get('published'));
 
       for (const [index, item] of items.entries()) {
-        if (existingTitles.has(item.title as string)) {
+        const itemLocale = asLocale(item.locale ?? packageLocale);
+        if (taken.has(conceptIdentity(itemLocale, item.title as string))) {
           skipped += 1;
           continue;
         }
@@ -261,9 +277,10 @@ if (app) {
         try {
           await createConcept({
             title: (item.title as string).trim(),
-            description: ((item.description_draft ?? `מסמך קונספט: ${item.title}`).trim().slice(0, 500)),
+            description: ((item.description_draft ?? item.description ?? `מסמך קונספט: ${item.title}`).trim().slice(0, 500)),
             section: 'queue',
             priority: Number.isFinite(Number(item.priority)) ? Number(item.priority) : index + 1,
+            locale: itemLocale,
             banner: packageFile(files, item.banner as string),
             pdf: packageFile(files, item.pdf as string),
             published: shouldPublish,
