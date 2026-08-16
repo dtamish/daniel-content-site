@@ -309,15 +309,19 @@ test('the deployment remains compatible while hosted editor roles are migrated',
   assert.match(migration, /identity_kind in \('management', 'honi', 'itzik'\)/);
 });
 
-test('review saving avoids recursive policies and keeps upload approval separate', () => {
+test('review saving stays open to every role while editor upload remains role-scoped', () => {
   const migration = readFileSync(join(root, 'supabase/migrations/202608160003_review_flow_reset.sql'), 'utf8');
+  const openAccessMigration = readFileSync(join(root, 'supabase/migrations/202608160004_open_reviewer_access.sql'), 'utf8');
   const repository = readFileSync(join(root, 'src/lib/concept-repository.ts'), 'utf8');
 
   assert.match(migration, /drop policy if exists "profiles: read self, published reviewers, or editor"/);
   assert.match(migration, /identity_kind as reviewer_role|new\.reviewer_role/);
-  assert.doesNotMatch(migration, /Profile must be approved to submit reviews/);
-  assert.match(migration, /p\.approved = true/);
-  assert.match(migration, /Reviewer profile is awaiting approval/);
+  assert.match(openAccessMigration, /approved\)\s*values[\s\S]*true/);
+  assert.match(openAccessMigration, /update public\.profiles set approved = true/);
+  assert.match(openAccessMigration, /reviews: open link inserts own review/);
+  assert.doesNotMatch(openAccessMigration, /p\.approved = true/);
+  assert.match(openAccessMigration, /is_approved_editor\(\)/);
+  assert.match(openAccessMigration, /set_reviewer_role/);
   assert.match(migration, /decision in \('priority-approved', 'schedule-approved', 'canceled', 'reset', 'wait'\)/);
   assert.match(migration, /clear_prior_notes/);
   assert.match(migration, /affects_decision/);
@@ -325,8 +329,7 @@ test('review saving avoids recursive policies and keeps upload approval separate
   assert.doesNotMatch(repository, /profiles\(identity_kind\)/);
   assert.match(repository, /reviewer_role/);
   assert.match(repository, /affects_decision/);
-  assert.match(repository, /\.from\('profiles'\)\.select\('approved'\)/);
-  assert.match(repository, /REVIEWER_APPROVAL_REQUIRED/);
+  assert.match(repository, /rpc\('set_reviewer_role'/);
 });
 
 test('native modal dialogs own Escape and Tab before the reader keyboard trap', () => {

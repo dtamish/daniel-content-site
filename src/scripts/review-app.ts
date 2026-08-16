@@ -941,9 +941,9 @@ if (appRoot) {
       if (active?.id === concept.id) closeReader();
       render();
     } catch (error) {
-      el.resetStatus.textContent = error instanceof Error && error.message === 'REVIEWER_APPROVAL_REQUIRED'
-        ? strings.reviewerApprovalRequired
-        : error instanceof Error ? `${strings.resetFailed} ${error.message}` : strings.resetFailed;
+      el.resetStatus.textContent = error instanceof Error
+        ? `${strings.resetFailed} ${error.message}`
+        : strings.resetFailed;
       el.resetSubmit.disabled = false;
     }
   });
@@ -1006,9 +1006,9 @@ if (appRoot) {
         render();
       }
     } catch (error) {
-      el.commentsStatus.textContent = error instanceof Error && error.message === 'REVIEWER_APPROVAL_REQUIRED'
-        ? strings.reviewerApprovalRequired
-        : error instanceof Error ? `${strings.decisionFailed} ${error.message}` : strings.decisionFailed;
+      el.commentsStatus.textContent = error instanceof Error
+        ? `${strings.decisionFailed} ${error.message}`
+        : strings.decisionFailed;
     } finally {
       el.commentsSubmit.disabled = false;
     }

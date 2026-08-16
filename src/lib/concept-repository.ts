@@ -142,16 +142,15 @@ export async function saveReview({ conceptId, decision, notes, identity, reviewe
   const userId = sessionData.session?.user.id;
   if (!userId) throw new Error('Could not establish an authenticated identity for saving.');
 
-  // A new anonymous browser session gets an unapproved profile. Check that
-  // state explicitly so the UI can distinguish access approval from a broken
-  // save operation instead of exposing a generic RLS error.
-  const { data: profile, error: profileError } = await client
-    .from('profiles').select('approved').eq('id', userId).maybeSingle();
-  if (profileError) throw profileError;
-  if (!profile?.approved) throw new Error('REVIEWER_APPROVAL_REQUIRED');
+  // The shared link is intentionally open. Persist the role selected in the
+  // visible picker so changing identity also works in an existing session.
+  const { error: roleError } = await client.rpc('set_reviewer_role', {
+    requested_kind: identity.kind,
+  });
+  if (roleError) throw roleError;
 
-  // The database trigger creates the immutable reviewer profile from auth metadata.
-  // A browser is never allowed to upsert a display name or grant itself a role.
+  // The database trigger copies the selected role onto the immutable review row
+  // and always binds reviewer_id to the current anonymous session.
   const { data, error } = await client.from('reviews').insert({
     concept_id: conceptId,
     decision,
