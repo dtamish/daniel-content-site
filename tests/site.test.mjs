@@ -349,6 +349,8 @@ test('approved concepts expose editorial estimates and sorting without affecting
   assert.match(migration, /production_speed in \('fast', 'medium', 'slow'\)/);
   assert.match(migration, /budget_level in \('low', 'medium', 'high'\)/);
   assert.match(migration, /Content editor role required/);
+  assert.match(migration, /selected_role text/);
+  assert.doesNotMatch(migration, /current_role text/);
   assert.match(migration, /Concept must be approved before assessment/);
 });
 

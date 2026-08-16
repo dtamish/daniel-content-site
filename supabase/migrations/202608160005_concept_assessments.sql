@@ -36,18 +36,18 @@ security definer
 set search_path = ''
 as $$
 declare
-  current_role text;
+  selected_role text;
   latest_decision text;
 begin
   if auth.uid() is null then
     raise exception 'Authenticated session required';
   end if;
 
-  select p.identity_kind into current_role
+  select p.identity_kind into selected_role
   from public.profiles p
   where p.id = auth.uid();
 
-  if current_role <> 'content_editor' then
+  if selected_role <> 'content_editor' then
     raise exception 'Content editor role required' using errcode = '42501';
   end if;
 
