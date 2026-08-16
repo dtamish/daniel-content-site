@@ -32,11 +32,12 @@ if (app) {
     }
     const { data: profile, error: profileError } = await client
       .from('profiles')
-      .select('is_editor,approved')
+      .select('identity_kind,approved')
       .eq('id', session.user.id)
       .maybeSingle();
     if (profileError) throw profileError;
-    const authorized = Boolean(profile?.is_editor && profile?.approved);
+    // "editor" remains accepted during the hosted role-migration window.
+    const authorized = Boolean(profile?.approved && ['content_editor', 'editor'].includes(profile.identity_kind));
     authPanel.hidden = true;
     approvalPanel.hidden = authorized;
     workspace.hidden = !authorized;

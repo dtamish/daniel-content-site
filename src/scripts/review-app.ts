@@ -4,13 +4,16 @@ import {
   CATEGORY_COLOURS, conceptCategory, conceptStatus, countByStatus, conceptsWithStatus,
   decisionLabels, groupByCategory, latestReview,
 } from '../lib/review-state.mjs';
-import { DEFAULT_LOCALE, STRINGS, direction, isLocale, type Locale } from '../lib/i18n';
+import { DEFAULT_LOCALE, STRINGS, direction, isLocale, type Locale, type ReviewerRole } from '../lib/i18n';
 import { isSupabaseConfigured, loadConcepts, saveReview, type Identity } from '../lib/concept-repository';
 import { withBase } from '../lib/urls';
 
 pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
 
-type Review = { reviewerId: string; reviewerName: string; decision: string; notes?: string; createdAt: string };
+type Review = {
+  reviewerId: string; reviewerName: string; reviewerRole?: ReviewerRole; isOwn?: boolean;
+  decision: string; notes?: string; createdAt: string;
+};
 type Concept = {
   id: string; title: string; description: string; priority: number; category: string;
   bannerUrl: string; pdfUrl: string; reviews: Review[];
@@ -35,10 +38,10 @@ if (appRoot) {
     empty: need<HTMLElement>('[data-empty]'),
     notice: need<HTMLElement>('[data-mode-notice]'),
     tabs: need<HTMLElement>('[data-tabs]'),
+    viewButtons: need<HTMLElement>('.catalogue-tools'),
     identityDialog: need<HTMLDialogElement>('[data-identity-dialog]'),
     identityForm: need<HTMLFormElement>('[data-identity-form]'),
-    advisorField: need<HTMLElement>('[data-advisor-field]'),
-    advisorInput: need<HTMLInputElement>('#advisor-name'),
+
     identityLabel: need<HTMLElement>('[data-identity-label]'),
     identityInitial: need<HTMLElement>('[data-identity-initial]'),
     manageLink: need<HTMLAnchorElement>('[data-manage-link]'),
@@ -58,6 +61,17 @@ if (appRoot) {
     decisionForm: need<HTMLFormElement>('[data-decision-form]'),
     decisionTitle: need<HTMLElement>('[data-decision-title]'),
     decisionStatus: need<HTMLElement>('[data-decision-status]'),
+    documentPanel: need<HTMLElement>('[data-document-panel]'),
+    commentsPanel: need<HTMLElement>('[data-comments-panel]'),
+    commentsList: need<HTMLElement>('[data-comments-list]'),
+    commentsEmpty: need<HTMLElement>('[data-comments-empty]'),
+    commentsForm: need<HTMLFormElement>('[data-comments-form]'),
+    commentsInput: need<HTMLTextAreaElement>('[data-comments-input]'),
+    commentsStatus: need<HTMLElement>('[data-comments-status]'),
+    commentsSubmit: need<HTMLButtonElement>('[data-comments-submit]'),
+    pendingDecision: need<HTMLElement>('[data-pending-decision]'),
+    commentsCount: need<HTMLElement>('[data-comments-count]'),
+    commentsTitle: need<HTMLElement>('[data-comments-concept-title]'),
   };
 
   let locale: Locale = readLocale();
@@ -65,7 +79,9 @@ if (appRoot) {
   let concepts: Concept[] = [];
   const cache = new Map<Locale, Concept[]>();
   let tab: Status = 'pending';
+  let catalogueView: 'grid' | 'list' = 'grid';
   let identity: Identity | null = readIdentity();
+  let pendingDecision = '';
 
   let pdf: pdfjs.PDFDocumentProxy | null = null;
   let loadingTask: pdfjs.PDFDocumentLoadingTask | null = null;
@@ -88,14 +104,21 @@ if (appRoot) {
   function readIdentity(): Identity | null {
     try {
       const parsed = JSON.parse(localStorage.getItem(IDENTITY_KEY) ?? 'null');
-      return parsed?.kind && parsed?.name ? (parsed as Identity) : null;
+      const legacy: Record<string, ReviewerRole> = {
+        honi: 'management', itzik: 'management', editor: 'content_editor', advisor: 'advisor',
+      };
+      const kind = legacy[parsed?.kind] ?? parsed?.kind;
+      return ['management', 'content_editor', 'advisor'].includes(kind)
+        ? { kind, name: STRINGS[readLocale()].people[kind as ReviewerRole] }
+        : null;
     } catch {
       return null;
     }
   }
 
   function identityName(kind: Identity['kind'], custom: string) {
-    return kind === 'advisor' ? custom.trim() || strings.people.advisor : strings.people[kind];
+    void custom;
+    return strings.people[kind];
   }
 
   function applyIdentity(next: Identity) {
@@ -103,7 +126,7 @@ if (appRoot) {
     localStorage.setItem(IDENTITY_KEY, JSON.stringify(next));
     el.identityLabel.textContent = next.name;
     el.identityInitial.textContent = [...next.name][0] ?? '?';
-    el.manageLink.hidden = next.kind !== 'editor';
+    el.manageLink.hidden = next.kind !== 'content_editor';
   }
 
   // ------------------------------------------------------------------ locale
@@ -119,17 +142,23 @@ if (appRoot) {
     identityHelp: () => strings.identityHelp,
     identityEnter: () => strings.identityEnter,
     identityAdvisorName: () => strings.identityAdvisorName,
-    'person.honi': () => strings.people.honi,
-    'person.itzik': () => strings.people.itzik,
+    'person.management': () => strings.people.management,
+    'person.content_editor': () => strings.people.content_editor,
     'person.advisor': () => strings.people.advisor,
-    'person.editor': () => strings.people.editor,
     'tab.pending': () => strings.tabs.pending,
     'tab.approved': () => strings.tabs.approved,
     'tab.rejected': () => strings.tabs.rejected,
     decisionFor: () => strings.decisionFor,
-    decisionNote: () => strings.decisionNote,
-    decisionNoteOptional: () => strings.decisionNoteOptional,
-    decisionSave: () => strings.decisionSave,
+    decisionHelp: () => strings.decisionHelp,
+    decisionContinue: () => strings.decisionContinue,
+    gridView: () => strings.gridView,
+    listView: () => strings.listView,
+    documentView: () => strings.documentView,
+    commentsView: () => strings.commentsView,
+    commentsTitle: () => strings.commentsTitle,
+    commentsEmpty: () => strings.commentsEmpty,
+    commentsHelp: () => strings.commentsHelp,
+    commentsOptional: () => strings.commentsOptional,
   };
 
   function applyStrings() {
@@ -140,20 +169,20 @@ if (appRoot) {
       const value = I18N_TARGETS[node.dataset.i18n ?? ''];
       if (value) node.textContent = value();
     }
-    const labels = decisionLabels(locale);
+    const labels = decisionLabels(locale) as Record<string, string>;
     for (const node of root.querySelectorAll<HTMLElement>('[data-decision-label]')) {
       node.textContent = labels[node.dataset.decisionLabel as keyof typeof labels] ?? '';
     }
     el.localeLabel.textContent = strings.languageSwitchTo;
     el.localeToggle.setAttribute('aria-label', strings.languageSwitchLabel);
-    el.identityLabel.textContent = identity
-      ? (identity.kind === 'advisor' ? identity.name : strings.people[identity.kind])
-      : strings.identityQuestion;
+    if (identity) identity = { ...identity, name: strings.people[identity.kind] };
+    el.identityLabel.textContent = identity ? strings.people[identity.kind] : strings.identityQuestion;
     el.prev.setAttribute('aria-label', strings.prevPage);
     el.next.setAttribute('aria-label', strings.nextPage);
     need<HTMLButtonElement>('[data-close-reader]').setAttribute('aria-label', strings.close);
     el.notice.textContent = isSupabaseConfigured ? strings.liveNotice : strings.demoNotice;
     el.notice.hidden = !el.notice.textContent;
+    el.commentsInput.placeholder = strings.commentsPlaceholder;
   }
 
   async function setLocale(next: Locale) {
@@ -177,10 +206,15 @@ if (appRoot) {
       for (const record of stored) {
         const concept = items.find(({ id }) => id === record.conceptId);
         if (!concept) continue;
+        const roleMap: Record<string, ReviewerRole> = { honi: 'management', itzik: 'management', editor: 'content_editor', advisor: 'advisor' };
+        const role = roleMap[record.identity.kind] ?? record.identity.kind;
+        const decision = record.decision === 'wait' ? 'schedule-approved' : record.decision;
         concept.reviews.push({
-          reviewerId: `local:${record.identity.kind}:${record.identity.name}`,
-          reviewerName: record.identity.name,
-          decision: record.decision,
+          reviewerId: `local:${role}`,
+          reviewerName: strings.people[role as ReviewerRole],
+          reviewerRole: role,
+          isOwn: identity?.kind === role,
+          decision,
           notes: record.notes ?? '',
           createdAt: record.createdAt,
         });
@@ -216,6 +250,7 @@ if (appRoot) {
   }
 
   function render() {
+    el.grid.classList.toggle('room-view-list', catalogueView === 'list');
     const counts = countByStatus(concepts);
     for (const node of el.tabs.querySelectorAll<HTMLElement>('[data-count]')) {
       node.textContent = String(counts[node.dataset.count as Status] ?? 0);
@@ -231,7 +266,7 @@ if (appRoot) {
     el.empty.hidden = visible.length > 0;
     el.empty.textContent = strings.empty[tab];
 
-    const labels = decisionLabels(locale);
+    const labels = decisionLabels(locale) as Record<string, string>;
     for (const { category, items } of groupByCategory(visible)) {
       const colour = CATEGORY_COLOURS[category as keyof typeof CATEGORY_COLOURS];
       const section = create('section', 'group');
@@ -267,56 +302,79 @@ if (appRoot) {
       }
       const body = create('span', 'card-body');
       body.append(create('span', 'card-title', concept.title));
+      body.append(create('span', 'card-category', strings.categories[conceptCategory(concept) as keyof typeof strings.categories]));
       body.append(create('span', 'card-summary', summary(concept.description)));
 
       const latest = latestReview(concept.reviews);
       const mark = create('span', `card-status is-${status}`);
       mark.textContent = latest
-        ? `${latest.reviewerName} · ${labels[latest.decision as keyof typeof labels] ?? latest.decision}`
+        ? `${latest.reviewerName} · ${labels[latest.decision as keyof typeof labels] ?? strings.tabs.pending}`
         : strings.noDecisionYet;
       body.append(mark);
 
       card.append(banner, body);
       article.append(card);
 
-      // A decision is a record, so it is never erased. Moving a concept back to pending
-      // records "hold" as a new decision, which is both an undo and an honest history.
-      if (status !== 'pending') {
-        const actions = create('div', 'card-actions');
-        const undo = create('button', 'card-undo', strings.returnToPending);
-        undo.type = 'button';
-        undo.addEventListener('click', async () => {
-          if (!identity) {
-            el.identityDialog.showModal();
-            return;
-          }
-          undo.disabled = true;
-          undo.textContent = strings.returning;
-          try {
-            await saveReview({ conceptId: concept.id, decision: 'wait', notes: '', identity });
-            concept.reviews.push({
-              reviewerId: `current:${identity.kind}:${identity.name}`,
-              reviewerName: identity.name,
-              decision: 'wait',
-              notes: '',
-              createdAt: new Date().toISOString(),
-            });
-            render();
-          } catch (error) {
-            console.error(error);
-            undo.disabled = false;
-            undo.textContent = strings.decisionFailed;
-          }
-        });
-        actions.append(undo);
-        article.append(actions);
-      }
-
       target.append(article);
     }
   }
 
   // ------------------------------------------------------------------ reader
+  function switchReaderView(next: 'document' | 'comments') {
+    const comments = next === 'comments';
+    el.documentPanel.hidden = comments;
+    el.commentsPanel.hidden = !comments;
+    for (const button of root.querySelectorAll<HTMLButtonElement>('[data-reader-view]')) {
+      const current = button.dataset.readerView === next;
+      button.classList.toggle('is-active', current);
+      button.setAttribute('aria-pressed', String(current));
+    }
+    if (comments) renderComments();
+  }
+
+  function ownLatestComment() {
+    if (!active || !identity) return null;
+    const currentIdentity = identity;
+    return [...active.reviews].reverse().find((review) => review.notes?.trim() && (
+      review.isOwn || (review.reviewerRole === currentIdentity.kind && review.reviewerName === currentIdentity.name)
+    )) ?? null;
+  }
+
+  function renderComments() {
+    if (!active) return;
+    const labels = decisionLabels(locale) as Record<string, string>;
+    const comments = active.reviews.filter((review) => review.notes?.trim());
+    el.commentsTitle.textContent = active.title;
+    el.commentsCount.textContent = String(comments.length);
+    el.commentsList.replaceChildren();
+    el.commentsEmpty.hidden = comments.length > 0;
+    for (const review of comments) {
+      const role = review.reviewerRole ?? 'advisor';
+      const article = create('article', `comment comment-role-${role}`);
+      const head = create('div', 'comment-head');
+      head.append(
+        create('strong', '', strings.people[role]),
+        create('span', '', labels[review.decision] ?? strings.tabs.pending),
+      );
+      article.append(head, create('p', 'comment-body', review.notes));
+      if (review.isOwn || (identity && role === identity.kind && review.reviewerName === identity.name)) {
+        const edit = create('button', 'comment-edit', strings.editComment);
+        edit.type = 'button';
+        edit.addEventListener('click', () => {
+          el.commentsInput.value = review.notes ?? '';
+          el.commentsInput.focus();
+          el.commentsSubmit.textContent = strings.saveComment;
+        });
+        article.append(edit);
+      }
+      el.commentsList.append(article);
+    }
+    const own = ownLatestComment();
+    el.commentsSubmit.textContent = pendingDecision ? strings.saveDecision : (own ? strings.saveComment : strings.addComment);
+    el.pendingDecision.hidden = !pendingDecision;
+    el.pendingDecision.textContent = pendingDecision ? `${strings.lastDecision}: ${labels[pendingDecision] ?? pendingDecision}` : '';
+  }
+
   function setReaderState(message: string) {
     el.readerState.textContent = message;
     el.readerState.hidden = !message;
@@ -429,14 +487,18 @@ if (appRoot) {
 
   async function openReader(concept: Concept) {
     active = concept;
+    pendingDecision = '';
     view = 0;
     zoom = 1;
     el.readerTitle.textContent = concept.title;
     el.decisionTitle.textContent = concept.title;
     el.decisionForm.reset();
+    el.commentsForm.reset();
     el.decisionStatus.textContent = '';
     need<HTMLButtonElement>('[data-decision-form] button[type="submit"]').disabled = true;
     el.reader.hidden = false;
+    switchReaderView('document');
+    renderComments();
     document.body.classList.add('reader-open');
     setReaderState(strings.loadingDocument);
 
@@ -477,6 +539,7 @@ if (appRoot) {
     loadingTask = null;
     pdf = null;
     active = null;
+    pendingDecision = '';
     pageCount = 0;
     view = 0;
     const context = el.canvas.getContext('2d');
@@ -514,14 +577,6 @@ if (appRoot) {
   let pinchZoom = 1;
   let lastTap = 0;
 
-  const distanceBetween = () => {
-    const [a, b] = [...points.values()];
-    return Math.hypot(a.x - b.x, a.y - b.y);
-  };
-  const midpointOf = () => {
-    const [a, b] = [...points.values()];
-    return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
-  };
 
   // The distance travelled is measured from the last movement, never from the ending
   // event: pointercancel and touchcancel commonly carry clientX 0, which would read as a
@@ -682,9 +737,24 @@ if (appRoot) {
     render();
   });
 
+  el.viewButtons.addEventListener('click', (event) => {
+    const button = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-view]');
+    if (!button) return;
+    catalogueView = button.dataset.view === 'list' ? 'list' : 'grid';
+    for (const candidate of el.viewButtons.querySelectorAll<HTMLButtonElement>('[data-view]')) {
+      const current = candidate === button;
+      candidate.classList.toggle('is-active', current);
+      candidate.setAttribute('aria-pressed', String(current));
+    }
+    render();
+  });
+
   el.localeToggle.addEventListener('click', () => void setLocale(locale === 'he' ? 'en' : 'he'));
   need<HTMLButtonElement>('[data-change-identity]').addEventListener('click', () => el.identityDialog.showModal());
   need<HTMLButtonElement>('[data-close-reader]').addEventListener('click', closeReader);
+  root.querySelectorAll<HTMLButtonElement>('[data-reader-view]').forEach((button) => {
+    button.addEventListener('click', () => switchReaderView(button.dataset.readerView === 'comments' ? 'comments' : 'document'));
+  });
   el.prev.addEventListener('click', () => goTo(view - 1));
   el.next.addEventListener('click', () => goTo(view + 1));
 
@@ -706,17 +776,11 @@ if (appRoot) {
     resizeTimer = window.setTimeout(() => void requestPaint(), 140);
   });
 
-  el.identityForm.addEventListener('change', () => {
-    const selected = new FormData(el.identityForm).get('identity');
-    el.advisorField.hidden = selected !== 'advisor';
-    el.advisorInput.required = selected === 'advisor';
-  });
-
   el.identityForm.addEventListener('submit', (event) => {
     event.preventDefault();
     const kind = String(new FormData(el.identityForm).get('identity')) as Identity['kind'];
     if (!kind || !(kind in strings.people)) return;
-    applyIdentity({ kind, name: identityName(kind, el.advisorInput.value) });
+    applyIdentity({ kind, name: identityName(kind, '') });
     el.identityDialog.close();
   });
 
@@ -725,7 +789,7 @@ if (appRoot) {
     need<HTMLButtonElement>('[data-decision-form] button[type="submit"]').disabled = !chosen;
   });
 
-  el.decisionForm.addEventListener('submit', async (event) => {
+  el.decisionForm.addEventListener('submit', (event) => {
     event.preventDefault();
     if (!active) return;
     if (!identity) {
@@ -733,30 +797,56 @@ if (appRoot) {
       el.identityDialog.showModal();
       return;
     }
-    const submit = need<HTMLButtonElement>('[data-decision-form] button[type="submit"]');
-    const data = new FormData(el.decisionForm);
-    const decision = String(data.get('decision') ?? '');
-    submit.disabled = true;
-    el.decisionStatus.textContent = strings.decisionSaving;
+    pendingDecision = String(new FormData(el.decisionForm).get('decision') ?? '');
+    if (!pendingDecision) return;
+    el.commentsInput.value = ownLatestComment()?.notes ?? '';
+    el.decisionStatus.textContent = '';
+    switchReaderView('comments');
+    window.setTimeout(() => el.commentsInput.focus(), 0);
+  });
+
+  el.commentsForm.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    if (!active) return;
+    if (!identity) {
+      el.commentsStatus.textContent = strings.decisionNeedsIdentity;
+      el.identityDialog.showModal();
+      return;
+    }
+    const decision = pendingDecision || latestReview(active.reviews)?.decision || '';
+    if (!decision) {
+      el.commentsStatus.textContent = strings.chooseDecisionFirst;
+      switchReaderView('document');
+      goTo(pageCount);
+      return;
+    }
+    const notes = el.commentsInput.value.trim();
+    el.commentsSubmit.disabled = true;
+    el.commentsStatus.textContent = strings.decisionSaving;
     try {
-      const result = await saveReview({
-        conceptId: active.id, decision, notes: String(data.get('notes') ?? ''), identity,
-      });
+      const result = await saveReview({ conceptId: active.id, decision, notes, identity });
       active.reviews.push({
         reviewerId: `current:${identity.kind}:${identity.name}`,
         reviewerName: identity.name,
+        reviewerRole: identity.kind,
+        isOwn: true,
         decision,
-        notes: String(data.get('notes') ?? ''),
+        notes,
         createdAt: new Date().toISOString(),
       });
-      el.decisionStatus.textContent = result.mode === 'demo' ? strings.decisionSavedLocal : strings.decisionSaved;
+      el.commentsStatus.textContent = result.mode === 'demo'
+        ? strings.decisionSavedLocal
+        : (pendingDecision ? strings.decisionSaved : strings.commentSaved);
+      pendingDecision = '';
+      el.commentsInput.value = '';
+      renderComments();
       render();
-      window.setTimeout(closeReader, 620);
     } catch (error) {
-      el.decisionStatus.textContent = error instanceof Error
+      el.commentsStatus.textContent = error instanceof Error
         ? `${strings.decisionFailed} ${error.message}`
         : strings.decisionFailed;
-      submit.disabled = false;
+    } finally {
+      el.commentsSubmit.disabled = false;
     }
   });
 

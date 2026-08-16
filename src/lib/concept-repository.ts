@@ -1,15 +1,15 @@
 import { demoConceptsByLocale } from '../data/demo-concepts.mjs';
 import { getSupabaseClient, isSupabaseConfigured } from './supabase-client';
-import { DEFAULT_LOCALE, type Locale } from './i18n';
+import { DEFAULT_LOCALE, type Locale, type ReviewerRole } from './i18n';
 
-export type Identity = { kind: 'honi' | 'itzik' | 'advisor' | 'editor'; name: string };
+export type Identity = { kind: ReviewerRole; name: string };
 
 type DatabaseReview = {
   reviewer_id: string;
   decision: string;
   created_at: string;
   notes?: string | null;
-  profiles: { display_name: string } | { display_name: string }[] | null;
+  profiles: { display_name: string; identity_kind: string } | { display_name: string; identity_kind: string }[] | null;
 };
 
 type ConceptRow = {
@@ -27,6 +27,20 @@ type ConceptRow = {
 
 const ANONYMOUS_REVIEWER = { he: 'סוקר/ת', en: 'Reviewer' } as const;
 
+function normalizeReviewerRole(value: string | undefined): ReviewerRole {
+  if (value === 'content_editor' || value === 'editor') return 'content_editor';
+  if (value === 'management' || value === 'honi' || value === 'itzik') return 'management';
+  return 'advisor';
+}
+
+function compatibleAuthRole(role: ReviewerRole) {
+  // Legacy aliases keep authentication working before the hosted migration;
+  // the migration normalizes both old and new aliases to the canonical roles.
+  if (role === 'management') return 'honi';
+  if (role === 'content_editor') return 'editor';
+  return 'advisor';
+}
+
 async function signedMediaUrl(bucket: string, path: string | null) {
   const client = getSupabaseClient();
   if (!client || !path) return '';
@@ -43,7 +57,9 @@ export async function loadConcepts(locale: Locale = DEFAULT_LOCALE) {
   const client = getSupabaseClient();
   if (!client) return structuredClone(demoConceptsByLocale[locale] ?? demoConceptsByLocale[DEFAULT_LOCALE]);
 
-  const REVIEWS = 'reviews(reviewer_id,decision,notes,created_at,profiles(display_name))';
+  const { data: sessionData } = await client.auth.getSession();
+  const currentUserId = sessionData.session?.user.id ?? null;
+  const REVIEWS = 'reviews(reviewer_id,decision,notes,created_at,profiles(display_name,identity_kind))';
   const BASE = 'id,title,description,section,priority,locale,banner_path,pdf_path';
 
   const query = (columns: string) => client
@@ -76,6 +92,8 @@ export async function loadConcepts(locale: Locale = DEFAULT_LOCALE) {
       reviewerName: Array.isArray(review.profiles)
         ? review.profiles[0]?.display_name ?? ANONYMOUS_REVIEWER[locale]
         : review.profiles?.display_name ?? ANONYMOUS_REVIEWER[locale],
+      reviewerRole: normalizeReviewerRole(Array.isArray(review.profiles) ? review.profiles[0]?.identity_kind : review.profiles?.identity_kind),
+      isOwn: review.reviewer_id === currentUserId,
       decision: review.decision,
       notes: review.notes ?? '',
       createdAt: review.created_at,
@@ -101,7 +119,7 @@ export async function saveReview({ conceptId, decision, notes, identity }: {
   let { data: sessionData } = await client.auth.getSession();
   if (!sessionData.session) {
     const { data, error } = await client.auth.signInAnonymously({
-      options: { data: { display_name: identity.name, identity_kind: identity.kind } },
+      options: { data: { display_name: identity.name, identity_kind: compatibleAuthRole(identity.kind) } },
     });
     if (error) throw error;
     sessionData = { session: data.session };

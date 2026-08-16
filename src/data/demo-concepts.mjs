@@ -15,7 +15,7 @@ const he = [
     bannerUrl: '',
     pdfUrl: 'demo/concept-demo.pdf',
     reviews: [
-      { reviewerId: 'demo-honi', reviewerName: 'חוני', decision: 'priority-approved', notes: '', createdAt: '2026-08-02T11:00:00Z' },
+      { reviewerId: 'demo-management', reviewerName: 'הנהלה', reviewerRole: 'management', decision: 'priority-approved', notes: 'מוכן להתקדמות ל־MVP.', createdAt: '2026-08-02T11:00:00Z' },
     ],
   },
   {
@@ -29,7 +29,7 @@ const he = [
     bannerUrl: '',
     pdfUrl: 'demo/concept-demo.pdf',
     reviews: [
-      { reviewerId: 'demo-honi', reviewerName: 'חוני', decision: 'wait', notes: '', createdAt: '2026-08-03T08:30:00Z' },
+      { reviewerId: 'demo-advisor', reviewerName: 'יועץ/ת', reviewerRole: 'advisor', decision: 'schedule-approved', notes: 'לחזור לתזמון אחרי ההשקה.', createdAt: '2026-08-03T08:30:00Z' },
     ],
   },
   {
@@ -55,7 +55,7 @@ const he = [
     bannerUrl: '',
     pdfUrl: 'demo/concept-demo.pdf',
     reviews: [
-      { reviewerId: 'demo-itzik', reviewerName: 'איציק', decision: 'canceled', notes: '', createdAt: '2026-08-04T09:15:00Z' },
+      { reviewerId: 'demo-editor', reviewerName: 'עורך/ת תוכן', reviewerRole: 'content_editor', decision: 'canceled', notes: 'הכיוון אינו בשל מספיק.', createdAt: '2026-08-04T09:15:00Z' },
     ],
   },
 ];
@@ -72,7 +72,7 @@ const en = [
     bannerUrl: '',
     pdfUrl: 'demo/concept-demo.pdf',
     reviews: [
-      { reviewerId: 'demo-honi', reviewerName: 'Honi', decision: 'priority-approved', notes: '', createdAt: '2026-08-02T11:00:00Z' },
+      { reviewerId: 'demo-management', reviewerName: 'Management', reviewerRole: 'management', decision: 'priority-approved', notes: 'Ready to move into an MVP.', createdAt: '2026-08-02T11:00:00Z' },
     ],
   },
   {
@@ -86,7 +86,7 @@ const en = [
     bannerUrl: '',
     pdfUrl: 'demo/concept-demo.pdf',
     reviews: [
-      { reviewerId: 'demo-honi', reviewerName: 'Honi', decision: 'wait', notes: '', createdAt: '2026-08-03T08:30:00Z' },
+      { reviewerId: 'demo-advisor', reviewerName: 'Advisor', reviewerRole: 'advisor', decision: 'schedule-approved', notes: 'Return to scheduling after launch.', createdAt: '2026-08-03T08:30:00Z' },
     ],
   },
   {

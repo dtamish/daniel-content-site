@@ -11,11 +11,10 @@ import {
 const decisions = [
   'priority-approved',
   'schedule-approved',
-  'wait',
   'canceled',
 ];
 
-test('accepts exactly the four production decisions', () => {
+test('accepts exactly the three production decisions', () => {
   assert.deepEqual(Object.keys(DECISIONS), decisions);
 
   for (const decision of decisions) {
@@ -39,6 +38,15 @@ test('rejects an invalid decision', () => {
     }),
     /invalid decision/i,
   );
+  assert.throws(
+    () => createReview({
+      conceptId: 'concept-1',
+      reviewerId: 'reviewer-1',
+      reviewerName: 'Reviewer',
+      decision: 'wait',
+    }),
+    /invalid decision/i,
+  );
 });
 
 test('creates one distinct badge per reviewer using the latest review', () => {
@@ -59,19 +67,19 @@ test('filters concepts by each reviewer latest decision only', () => {
     {
       id: 'one',
       reviews: [
-        { reviewerId: 'a', decision: 'wait', createdAt: '2026-08-01T08:00:00Z' },
+        { reviewerId: 'a', decision: 'canceled', createdAt: '2026-08-01T08:00:00Z' },
         { reviewerId: 'a', decision: 'priority-approved', createdAt: '2026-08-01T10:00:00Z' },
       ],
     },
     {
       id: 'two',
-      reviews: [{ reviewerId: 'b', decision: 'wait', createdAt: '2026-08-01T09:00:00Z' }],
+      reviews: [{ reviewerId: 'b', decision: 'canceled', createdAt: '2026-08-01T09:00:00Z' }],
     },
     { id: 'three', reviews: [] },
   ];
 
   assert.deepEqual(filterConceptsByLatestDecision(concepts, 'priority-approved').map(({ id }) => id), ['one']);
-  assert.deepEqual(filterConceptsByLatestDecision(concepts, 'wait').map(({ id }) => id), ['two']);
+  assert.deepEqual(filterConceptsByLatestDecision(concepts, 'canceled').map(({ id }) => id), ['two']);
   assert.deepEqual(filterConceptsByLatestDecision(concepts, 'pending').map(({ id }) => id), ['three']);
 });
 

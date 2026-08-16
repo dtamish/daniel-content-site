@@ -172,15 +172,53 @@ test('404 output does not advertise itself as a canonical or social URL', () => 
   assert.doesNotMatch(html, /<meta property="og:url"/);
 });
 
-test('concept review home exposes the focused review flow and exactly four decisions', () => {
+test('concept review home exposes the focused review flow and exactly three decisions', () => {
   const home = readFileSync(join(dist, 'index.html'), 'utf8');
 
   assert.match(home, /data-concept-grid/);
-  assert.match(home, /מאושר להפקה ולקדם במיידי/);
-  assert.match(home, /מאושר להפקה בסדר לוח השידורים/);
-  assert.match(home, /להמתין עם זה/);
-  assert.match(home, /לא מאושר להפקה — לבטל רעיון/);
-  assert.equal((home.match(/name="decision"/g) ?? []).length, 4);
+  assert.match(home, /Approved — MVP, start production immediately/);
+  assert.match(home, /Approved — schedule after launch/);
+  assert.match(home, /Not approved/);
+  assert.equal((home.match(/name="decision"/g) ?? []).length, 3);
+});
+
+test('English is the default and Hebrew remains one clear switch away', () => {
+  const home = readFileSync(join(dist, 'index.html'), 'utf8');
+  const i18n = readFileSync(join(root, 'src/lib/i18n.ts'), 'utf8');
+  assert.match(i18n, /DEFAULT_LOCALE: Locale = 'en'/);
+  assert.match(home, /<html[^>]*lang="en"[^>]*dir="ltr"/);
+  assert.match(home, /data-locale-toggle/);
+  assert.match(home, />עברית</);
+});
+
+test('the room exposes three role names without personal reviewer names', () => {
+  const home = readFileSync(join(dist, 'index.html'), 'utf8');
+  assert.match(home, /value="management"/);
+  assert.match(home, /value="content_editor"/);
+  assert.match(home, /value="advisor"/);
+  assert.doesNotMatch(home, /value="honi"|value="itzik"/);
+});
+
+test('catalogue supports an explicit grid and compact list view', () => {
+  const home = readFileSync(join(dist, 'index.html'), 'utf8');
+  const reviewScript = readFileSync(join(root, 'src/scripts/review-app.ts'), 'utf8');
+  assert.match(home, /data-view="grid"/);
+  assert.match(home, /data-view="list"/);
+  assert.match(reviewScript, /room-view-list/);
+});
+
+test('reader makes document, comments, and the decision destination explicit', () => {
+  const home = readFileSync(join(dist, 'index.html'), 'utf8');
+  const styles = readFileSync(join(root, 'src/styles/room.css'), 'utf8');
+  assert.match(home, /data-reader-view="document"/);
+  assert.match(home, /data-reader-view="comments"/);
+  assert.match(home, /data-comments-panel/);
+  assert.match(home, /data-comments-list/);
+  assert.match(home, /data-comments-form/);
+  assert.match(styles, /\.reader-view-tabs/);
+  assert.match(styles, /\.comment-role-management/);
+  assert.match(styles, /\.comment-role-content_editor/);
+  assert.match(styles, /\.comment-role-advisor/);
 });
 
 test('the room offers exactly three review tabs and no side drawer', () => {
@@ -243,6 +281,17 @@ test('admin refreshes its authorization state when the magic-link session arrive
   assert.match(adminScript, /auth\.onAuthStateChange/);
 });
 
+test('the deployment remains compatible while hosted editor roles are migrated', () => {
+  const adminScript = readFileSync(join(root, 'src/scripts/admin-app.ts'), 'utf8');
+  const repository = readFileSync(join(root, 'src/lib/concept-repository.ts'), 'utf8');
+
+  assert.match(adminScript, /\['content_editor', 'editor'\]\.includes/);
+  assert.match(repository, /value === 'content_editor' \|\| value === 'editor'/);
+  assert.match(repository, /value === 'management' \|\| value === 'honi' \|\| value === 'itzik'/);
+  assert.match(repository, /role === 'management'.*return 'honi'/s);
+  assert.match(repository, /role === 'content_editor'.*return 'editor'/s);
+});
+
 test('admin offers a manifest-backed bulk import for the prepared concept package', () => {
   const admin = readFileSync(join(dist, 'admin/index.html'), 'utf8');
 
@@ -301,13 +350,23 @@ test('the pager names the decision instead of hiding it behind a dot', () => {
   assert.match(styles, /\.decide-stop/);
 });
 
-test('a decided concept can be moved back to pending without erasing history', () => {
+test('comment revisions remain append-only instead of mutating review history', () => {
   const reviewScript = readFileSync(join(root, 'src/scripts/review-app.ts'), 'utf8');
+  const migration = readFileSync(join(root, 'supabase/migrations/202608060003_append_only_reviews.sql'), 'utf8');
 
-  assert.match(reviewScript, /card-undo/);
-  assert.match(reviewScript, /decision: 'wait'/);
-  // the undo is itself a recorded decision, never a delete
-  assert.doesNotMatch(reviewScript, /\.delete\(\)\s*\.eq\('id'/);
+  assert.match(reviewScript, /saveReview\(\{ conceptId: active\.id, decision, notes, identity \}\)/);
+  assert.match(reviewScript, /comment-edit/);
+  assert.match(migration, /before update on public\.reviews/);
+  assert.match(migration, /Review history is append-only/);
+});
+
+test('legacy wait history is preserved but cannot be inserted again', () => {
+  const migration = readFileSync(join(root, 'supabase/migrations/202608160001_roles_and_three_decisions.sql'), 'utf8');
+
+  assert.doesNotMatch(migration, /update public\.reviews set decision/);
+  assert.match(migration, /decision in \('priority-approved', 'schedule-approved', 'canceled', 'wait'\)/);
+  assert.match(migration, /before insert on public\.reviews/);
+  assert.match(migration, /new\.decision = 'wait'/);
 });
 
 test('a swipe cannot leave the page stuck invisible', () => {
@@ -348,7 +407,7 @@ test('draft content cannot leak into public output', () => {
   assert.doesNotMatch(output, /טיוטת בדיקה — לא אמורה להופיע באתר/);
 });
 
-test('every HTML page is Hebrew RTL, follows the configured index policy, and has one main heading', () => {
+test('every HTML page follows its configured language, index policy, and has one main heading', () => {
   const htmlFiles = walk(dist).filter((path) => extname(path) === '.html');
   assert.ok(htmlFiles.length >= 2);
 
@@ -358,7 +417,8 @@ test('every HTML page is Hebrew RTL, follows the configured index policy, and ha
     const shouldNoIndex = !settings.indexing || ['404.html', 'admin/index.html'].includes(outputPath);
     const expectedRobots = shouldNoIndex ? 'noindex, nofollow' : 'index, follow';
 
-    assert.match(html, /<html[^>]*lang="he"[^>]*dir="rtl"/);
+    if (outputPath === 'index.html') assert.match(html, /<html[^>]*lang="en"[^>]*dir="ltr"/);
+    else assert.match(html, /<html[^>]*lang="he"[^>]*dir="rtl"/);
     assert.match(html, /<meta name="viewport"/);
     assert.match(html, /<meta name="description" content="[^"]+"/);
     assert.ok(

@@ -15,6 +15,8 @@ interface Props {
   robots?: string;
   canonical?: boolean;
   appShell?: boolean;
+  lang?: 'he' | 'en';
+  dir?: 'rtl' | 'ltr';
 }
 
 const {
@@ -25,6 +27,8 @@ const {
   robots = settings.indexing ? 'index, follow' : 'noindex, nofollow',
   canonical = true,
   appShell = false,
+  lang = 'he',
+  dir = 'rtl',
 } = Astro.props;
 const fullTitle = title ? `${title} | ${settings.title}` : settings.title;
 const canonicalURL = canonical ? new URL(Astro.url.pathname, Astro.site ?? Astro.url.origin) : undefined;
@@ -32,7 +36,7 @@ const socialImage = image ? new URL(withBase(image), Astro.site ?? Astro.url.ori
 ---
 
 <!doctype html>
-<html lang="he" dir="rtl">
+<html lang={lang} dir={dir}>
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -43,7 +47,7 @@ const socialImage = image ? new URL(withBase(image), Astro.site ?? Astro.url.ori
     <link rel="icon" type="image/svg+xml" href={withBase('favicon.svg')} />
     {canonicalURL && <link rel="canonical" href={canonicalURL} />}
     <meta property="og:type" content={type} />
-    <meta property="og:locale" content="he_IL" />
+    <meta property="og:locale" content={lang === 'en' ? 'en_US' : 'he_IL'} />
     <meta property="og:title" content={fullTitle} />
     <meta property="og:description" content={description} />
     {canonicalURL && <meta property="og:url" content={canonicalURL} />}
@@ -52,7 +56,7 @@ const socialImage = image ? new URL(withBase(image), Astro.site ?? Astro.url.ori
     <title>{fullTitle}</title>
   </head>
   <body class:list={{ 'app-shell-body': appShell }}>
-    <a class="skip-link" href="#main-content">דילוג לתוכן</a>
+    <a class="skip-link" href="#main-content">{lang === 'en' ? 'Skip to content' : 'דילוג לתוכן'}</a>
     {!appShell && <Header />}
     {appShell ? <slot /> : <main id="main-content"><slot /></main>}
     {!appShell && <Footer />}

@@ -1,43 +1,34 @@
 ---
-import { DECISIONS } from '../lib/review-state.mjs';
+import { decisionLabels } from '../lib/review-state.mjs';
 import { STRINGS, DEFAULT_LOCALE } from '../lib/i18n';
 import { withBase } from '../lib/urls';
 import '../styles/room.css';
 
 const s = STRINGS[DEFAULT_LOCALE];
+const decisions = decisionLabels(DEFAULT_LOCALE);
 ---
 
 <div class="room" data-review-app data-admin-url={withBase('admin/')}>
   <header class="room-top">
-    <div class="room-brand">
-      <span class="mark" aria-hidden="true">SINAI</span>
-      <h1 data-i18n="brand">{s.brand}</h1>
-    </div>
+    <div class="room-brand"><span class="mark" aria-hidden="true">SINAI</span><h1 data-i18n="brand">{s.brand}</h1></div>
     <div class="room-top-actions">
       <a class="room-upload" data-manage-link href={withBase('admin/')} hidden><span data-i18n="manage">{s.manage}</span></a>
-      <button class="room-lang" type="button" data-locale-toggle aria-label={s.languageSwitchLabel}>
-        <span data-locale-label>{s.languageSwitchTo}</span>
-      </button>
-      <button class="room-who" type="button" data-change-identity>
-        <span class="dot" aria-hidden="true" data-identity-initial>?</span>
-        <span data-identity-label>{s.identityQuestion}</span>
-      </button>
+      <button class="room-lang" type="button" data-locale-toggle aria-label={s.languageSwitchLabel}><span data-locale-label>{s.languageSwitchTo}</span></button>
+      <button class="room-who" type="button" data-change-identity><span class="dot" aria-hidden="true" data-identity-initial>?</span><span data-identity-label>{s.identityQuestion}</span></button>
     </div>
   </header>
 
   <nav class="room-tabs" data-tabs aria-label="Review status">
-    <button type="button" data-tab="pending" class="is-active" aria-pressed="true">
-      <span data-i18n="tab.pending">{s.tabs.pending}</span><b data-count="pending">0</b>
-    </button>
-    <button type="button" data-tab="approved" aria-pressed="false">
-      <span data-i18n="tab.approved">{s.tabs.approved}</span><b data-count="approved">0</b>
-    </button>
-    <button type="button" data-tab="rejected" aria-pressed="false">
-      <span data-i18n="tab.rejected">{s.tabs.rejected}</span><b data-count="rejected">0</b>
-    </button>
+    <button type="button" data-tab="pending" class="is-active" aria-pressed="true"><span data-i18n="tab.pending">{s.tabs.pending}</span><b data-count="pending">0</b></button>
+    <button type="button" data-tab="approved" aria-pressed="false"><span data-i18n="tab.approved">{s.tabs.approved}</span><b data-count="approved">0</b></button>
+    <button type="button" data-tab="rejected" aria-pressed="false"><span data-i18n="tab.rejected">{s.tabs.rejected}</span><b data-count="rejected">0</b></button>
   </nav>
 
   <main class="room-main" id="main-content">
+    <div class="catalogue-tools" role="group" aria-label="Catalogue view">
+      <button type="button" data-view="grid" class="is-active" aria-pressed="true"><span aria-hidden="true">▦</span><span data-i18n="gridView">{s.gridView}</span></button>
+      <button type="button" data-view="list" aria-pressed="false"><span aria-hidden="true">☷</span><span data-i18n="listView">{s.listView}</span></button>
+    </div>
     <p class="room-notice" data-mode-notice role="status" hidden></p>
     <section class="room-grid" data-concept-grid aria-live="polite"></section>
     <p class="room-empty" data-empty hidden></p>
@@ -48,77 +39,70 @@ const s = STRINGS[DEFAULT_LOCALE];
       <h2 id="identity-title" data-i18n="identityQuestion">{s.identityQuestion}</h2>
       <p class="sheet-help" data-i18n="identityHelp">{s.identityHelp}</p>
       <div class="choices">
-        <label><input type="radio" name="identity" value="honi" required /><span data-i18n="person.honi">{s.people.honi}</span></label>
-        <label><input type="radio" name="identity" value="itzik" /><span data-i18n="person.itzik">{s.people.itzik}</span></label>
+        <label><input type="radio" name="identity" value="management" required /><span data-i18n="person.management">{s.people.management}</span></label>
+        <label><input type="radio" name="identity" value="content_editor" /><span data-i18n="person.content_editor">{s.people.content_editor}</span></label>
         <label><input type="radio" name="identity" value="advisor" /><span data-i18n="person.advisor">{s.people.advisor}</span></label>
-        <label><input type="radio" name="identity" value="editor" /><span data-i18n="person.editor">{s.people.editor}</span></label>
       </div>
-      <div class="field" data-advisor-field hidden>
-        <label for="advisor-name" data-i18n="identityAdvisorName">{s.identityAdvisorName}</label>
-        <input id="advisor-name" name="advisorName" autocomplete="name" maxlength="80" />
-      </div>
+
       <button class="primary" type="submit" data-i18n="identityEnter">{s.identityEnter}</button>
     </form>
   </dialog>
 
   <div class="reader" data-reader hidden>
     <div class="reader-bar">
-      <button class="icon" type="button" data-close-reader aria-label={s.close}>
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>
-      </button>
+      <button class="icon" type="button" data-close-reader aria-label={s.close}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg></button>
       <h2 data-reader-title></h2>
       <div class="reader-zoom">
-        <button class="icon" type="button" data-zoom-out aria-label={s.zoomOut}>
-          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6" /><path d="M8 11h6M20 20l-4.5-4.5" /></svg>
-        </button>
-        <button class="icon" type="button" data-zoom-in aria-label={s.zoomIn}>
-          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6" /><path d="M8 11h6M11 8v6M20 20l-4.5-4.5" /></svg>
-        </button>
+        <button class="icon" type="button" data-zoom-out aria-label={s.zoomOut}><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6" /><path d="M8 11h6M20 20l-4.5-4.5" /></svg></button>
+        <button class="icon" type="button" data-zoom-in aria-label={s.zoomIn}><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6" /><path d="M8 11h6M11 8v6M20 20l-4.5-4.5" /></svg></button>
       </div>
       <span class="reader-count" data-page-count></span>
     </div>
 
-    <div class="reader-stage" data-stage>
-      <div class="reader-track" data-track>
-        <div class="reader-slide" data-page-slide>
-          <canvas data-page-canvas></canvas>
+    <nav class="reader-view-tabs" aria-label="Concept views">
+      <button type="button" data-reader-view="document" class="is-active" aria-pressed="true"><span aria-hidden="true">▤</span><span data-i18n="documentView">{s.documentView}</span></button>
+      <button type="button" data-reader-view="comments" aria-pressed="false"><span aria-hidden="true">●</span><span data-i18n="commentsView">{s.commentsView}</span><b data-comments-count>0</b></button>
+    </nav>
+
+    <div class="reader-document" data-document-panel>
+      <div class="reader-stage" data-stage>
+        <div class="reader-track" data-track>
+          <div class="reader-slide" data-page-slide><canvas data-page-canvas></canvas></div>
+          <div class="reader-slide reader-decide" data-decision-slide>
+            <form class="decide" data-decision-form>
+              <p class="decide-kicker" data-i18n="decisionFor">{s.decisionFor}</p>
+              <h3 data-decision-title></h3>
+              <p class="decision-help" data-i18n="decisionHelp">{s.decisionHelp}</p>
+              <div class="decide-options">
+                {Object.entries(decisions).map(([value, label]) => <label><input type="radio" name="decision" value={value} required /><span data-decision-label={value}>{label}</span></label>)}
+              </div>
+              <button class="primary" type="submit" disabled data-i18n="decisionContinue">{s.decisionContinue}</button>
+              <p class="decide-status" data-decision-status role="status"></p>
+            </form>
+          </div>
         </div>
-        <div class="reader-slide reader-decide" data-decision-slide>
-          <form class="decide" data-decision-form>
-            <p class="decide-kicker" data-i18n="decisionFor">{s.decisionFor}</p>
-            <h3 data-decision-title></h3>
-            <div class="decide-options">
-              {Object.entries(DECISIONS).map(([value, label]) => (
-                <label>
-                  <input type="radio" name="decision" value={value} required />
-                  <span data-decision-label={value}>{label}</span>
-                </label>
-              ))}
-            </div>
-            <div class="field">
-              <label for="decision-note">
-                <span data-i18n="decisionNote">{s.decisionNote}</span>
-                <small data-i18n="decisionNoteOptional">{s.decisionNoteOptional}</small>
-              </label>
-              <textarea id="decision-note" name="notes" rows="2" maxlength="1000"></textarea>
-            </div>
-            <button class="primary" type="submit" disabled data-i18n="decisionSave">{s.decisionSave}</button>
-            <p class="decide-status" data-decision-status role="status"></p>
-          </form>
-        </div>
+        <p class="reader-state" data-reader-state></p>
       </div>
-      <p class="reader-state" data-reader-state></p>
+      <div class="reader-foot">
+        <button class="icon" type="button" data-prev aria-label={s.prevPage}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" /></svg></button>
+        <div class="reader-dots" data-dots></div>
+        <button class="icon" type="button" data-next aria-label={s.nextPage}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7" /></svg></button>
+      </div>
     </div>
 
-    <div class="reader-foot">
-      <button class="icon" type="button" data-prev aria-label={s.prevPage}>
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" /></svg>
-      </button>
-      <div class="reader-dots" data-dots></div>
-      <button class="icon" type="button" data-next aria-label={s.nextPage}>
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7" /></svg>
-      </button>
-    </div>
+    <section class="comments-panel" data-comments-panel hidden aria-labelledby="comments-title">
+      <div class="comments-inner">
+        <div class="comments-heading"><p class="decide-kicker" data-i18n="commentsTitle">{s.commentsTitle}</p><h3 id="comments-title" data-comments-concept-title></h3><p data-i18n="commentsHelp">{s.commentsHelp}</p></div>
+        <div class="comments-list" data-comments-list></div>
+        <p class="comments-empty" data-comments-empty data-i18n="commentsEmpty">{s.commentsEmpty}</p>
+        <form class="comments-form" data-comments-form>
+          <div class="pending-decision" data-pending-decision hidden></div>
+          <div class="field"><label for="comments-note"><span data-i18n="commentsView">{s.commentsView}</span><small data-i18n="commentsOptional">{s.commentsOptional}</small></label><textarea id="comments-note" name="notes" rows="5" maxlength="1000" data-comments-input placeholder={s.commentsPlaceholder}></textarea></div>
+          <button class="primary" type="submit" data-comments-submit>{s.addComment}</button>
+          <p class="decide-status" data-comments-status role="status"></p>
+        </form>
+      </div>
+    </section>
   </div>
 </div>
 <script>import '../scripts/review-app';</script>

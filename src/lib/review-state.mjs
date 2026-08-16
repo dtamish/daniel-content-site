@@ -1,15 +1,13 @@
 export const DECISIONS = Object.freeze({
-  'priority-approved': 'מאושר להפקה ולקדם במיידי',
-  'schedule-approved': 'מאושר להפקה בסדר לוח השידורים',
-  wait: 'להמתין עם זה',
-  canceled: 'לא מאושר להפקה — לבטל רעיון',
+  'priority-approved': 'מאושר — MVP, להפקה מיידית',
+  'schedule-approved': 'מאושר — לשיבוץ אחרי ההשקה',
+  canceled: 'לא מאושר',
 });
 
 const DECISIONS_EN = Object.freeze({
-  'priority-approved': 'Approved — fast-track production',
-  'schedule-approved': 'Approved — schedule in the normal slate',
-  wait: 'Hold for now',
-  canceled: 'Not approved — drop the idea',
+  'priority-approved': 'Approved — MVP, start production immediately',
+  'schedule-approved': 'Approved — schedule after launch',
+  canceled: 'Not approved',
 });
 
 /** Decision labels are content, so they are translated, while the stored keys never change. */
@@ -56,7 +54,6 @@ export const STATUSES = Object.freeze(['pending', 'approved', 'rejected']);
 const STATUS_OF_DECISION = Object.freeze({
   'priority-approved': 'approved',
   'schedule-approved': 'approved',
-  wait: 'pending',
   canceled: 'rejected',
 });
 

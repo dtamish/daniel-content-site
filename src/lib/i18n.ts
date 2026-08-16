@@ -1,16 +1,17 @@
 export type Locale = 'he' | 'en';
 
-export const LOCALES: Locale[] = ['he', 'en'];
-export const DEFAULT_LOCALE: Locale = 'he';
+export const LOCALES: Locale[] = ['en', 'he'];
+export const DEFAULT_LOCALE: Locale = 'en';
 
 export function isLocale(value: unknown): value is Locale {
   return value === 'he' || value === 'en';
 }
 
-/** Document direction for a locale. The concept room is the only bilingual surface. */
 export function direction(locale: Locale) {
   return locale === 'he' ? 'rtl' : 'ltr';
 }
+
+export type ReviewerRole = 'management' | 'content_editor' | 'advisor';
 
 type Strings = {
   brand: string;
@@ -23,7 +24,7 @@ type Strings = {
   identityEnter: string;
   identityChange: string;
   identityAdvisorName: string;
-  people: Record<'honi' | 'itzik' | 'advisor' | 'editor', string>;
+  people: Record<ReviewerRole, string>;
   tabs: Record<'pending' | 'approved' | 'rejected', string>;
   categories: Record<'film-long' | 'film-short' | 'film' | 'series' | 'digital' | 'podcast', string>;
   empty: Record<'pending' | 'approved' | 'rejected', string>;
@@ -38,13 +39,9 @@ type Strings = {
   documentFailed: string;
   decideHere: string;
   decisionMarker: string;
-  returnToPending: string;
-  returning: string;
-  returned: string;
   decisionFor: string;
-  decisionNote: string;
-  decisionNoteOptional: string;
-  decisionSave: string;
+  decisionHelp: string;
+  decisionContinue: string;
   decisionSaving: string;
   decisionSaved: string;
   decisionSavedLocal: string;
@@ -52,7 +49,6 @@ type Strings = {
   decisionNeedsIdentity: string;
   lastDecision: string;
   noDecisionYet: string;
-  historyTitle: string;
   manage: string;
   demoNotice: string;
   liveNotice: string;
@@ -60,88 +56,43 @@ type Strings = {
   missingInEnglish: string;
   skipToContent: string;
   documents: (count: number) => string;
-};
-
-const he: Strings = {
-  brand: 'חדר הקונספטים',
-  brandNote: 'SINAI',
-  languageName: 'עברית',
-  languageSwitchTo: 'EN',
-  languageSwitchLabel: 'Switch to English',
-  identityQuestion: 'מי נכנס/ת?',
-  identityHelp: 'הבחירה מופיעה ליד ההחלטות שלך.',
-  identityEnter: 'כניסה',
-  identityChange: 'החלפת זהות',
-  identityAdvisorName: 'שם היועץ/ת',
-  people: { honi: 'חוני', itzik: 'איציק', advisor: 'יועץ/ת', editor: 'עורך/ת תוכן' },
-  tabs: { pending: 'ממתינים', approved: 'מאושרים', rejected: 'נדחו' },
-  categories: {
-    'film-long': 'סרט ארוך · 30 דק׳',
-    'film-short': 'סרט קצר',
-    film: 'סרט',
-    series: 'סדרה',
-    digital: 'דיגיטל ורטיקלי',
-    podcast: 'פודקאסט',
-  },
-  empty: {
-    pending: 'אין קונספטים שממתינים להחלטה.',
-    approved: 'עוד לא אושר אף קונספט.',
-    rejected: 'לא נדחה אף קונספט.',
-  },
-  open: 'פתיחה',
-  close: 'סגירה',
-  prevPage: 'העמוד הקודם',
-  nextPage: 'העמוד הבא',
-  pageOf: (current, total) => `${current} מתוך ${total}`,
-  zoomIn: 'הגדלה',
-  zoomOut: 'הקטנה',
-  loadingDocument: 'טוען מסמך…',
-  documentFailed: 'לא הצלחנו לפתוח את המסמך.',
-  decideHere: 'הכרעה',
-  decisionMarker: 'הכרעה',
-  returnToPending: 'החזרה לממתינים',
-  returning: 'מחזיר…',
-  returned: 'הוחזר לממתינים.',
-  decisionFor: 'ההחלטה שלך על',
-  decisionNote: 'הערה לצוות',
-  decisionNoteOptional: 'לא חובה',
-  decisionSave: 'שמירת החלטה',
-  decisionSaving: 'שומר…',
-  decisionSaved: 'ההחלטה נשמרה.',
-  decisionSavedLocal: 'ההחלטה נשמרה במכשיר הזה.',
-  decisionFailed: 'השמירה נכשלה.',
-  decisionNeedsIdentity: 'כדי לשמור החלטה, בוחרים קודם מי אתם.',
-  lastDecision: 'ההחלטה האחרונה',
-  noDecisionYet: 'ממתין להחלטה',
-  historyTitle: 'היסטוריית החלטות',
-  manage: 'העלאת מסמכים',
-  demoNotice: 'מצב הדגמה — ההחלטות נשמרות רק בדפדפן הזה.',
-  liveNotice: '',
-  loadFailed: 'לא הצלחנו לטעון את הקונספטים. מוצגת תצוגת הדגמה.',
-  missingInEnglish: 'ארבעה קונספטים מוצגים בעברית בלבד, כי אין להם מסמך אנגלי מאושר.',
-  skipToContent: 'דילוג לתוכן',
-  documents: (count) => (count === 1 ? 'מסמך אחד' : `${count} מסמכים`),
+  gridView: string;
+  listView: string;
+  documentView: string;
+  commentsView: string;
+  commentsTitle: string;
+  commentsEmpty: string;
+  commentsHelp: string;
+  commentsOptional: string;
+  commentsPlaceholder: string;
+  saveDecision: string;
+  addComment: string;
+  saveComment: string;
+  editComment: string;
+  editedComment: string;
+  commentSaved: string;
+  chooseDecisionFirst: string;
 };
 
 const en: Strings = {
   brand: 'Concept Room',
   brandNote: 'SINAI',
   languageName: 'English',
-  languageSwitchTo: 'עב',
-  languageSwitchLabel: 'מעבר לעברית',
-  identityQuestion: "Who's reviewing?",
-  identityHelp: 'Your name appears next to your decisions.',
-  identityEnter: 'Enter',
-  identityChange: 'Change reviewer',
-  identityAdvisorName: 'Advisor name',
-  people: { honi: 'Honi', itzik: 'Itzik', advisor: 'Advisor', editor: 'Content editor' },
-  tabs: { pending: 'Pending', approved: 'Approved', rejected: 'Declined' },
+  languageSwitchTo: 'עברית',
+  languageSwitchLabel: 'Switch to Hebrew',
+  identityQuestion: "What's your role?",
+  identityHelp: 'Your role is shown beside your decisions and comments.',
+  identityEnter: 'Enter room',
+  identityChange: 'Change role',
+  identityAdvisorName: 'Your name (optional)',
+  people: { management: 'Management', content_editor: 'Content editor', advisor: 'Advisor' },
+  tabs: { pending: 'Pending', approved: 'Approved', rejected: 'Not approved' },
   categories: {
-    'film-long': 'Long film · 30 min',
+    'film-long': '30-minute film',
     'film-short': 'Short film',
     film: 'Film',
     series: 'Series',
-    digital: 'Vertical digital',
+    digital: 'Digital film',
     podcast: 'Podcast',
   },
   empty: {
@@ -158,34 +109,114 @@ const en: Strings = {
   zoomOut: 'Zoom out',
   loadingDocument: 'Loading document…',
   documentFailed: 'We could not open this document.',
-  decideHere: 'Decide',
-  decisionMarker: 'Decide',
-  returnToPending: 'Move back to pending',
-  returning: 'Moving…',
-  returned: 'Moved back to pending.',
-  decisionFor: 'Your decision on',
-  decisionNote: 'Note for the team',
-  decisionNoteOptional: 'optional',
-  decisionSave: 'Save decision',
+  decideHere: 'Decision',
+  decisionMarker: 'Decision',
+  decisionFor: 'Choose a decision for',
+  decisionHelp: 'After choosing, you can add a comment before saving.',
+  decisionContinue: 'Continue to comments',
   decisionSaving: 'Saving…',
   decisionSaved: 'Decision saved.',
   decisionSavedLocal: 'Decision saved on this device.',
   decisionFailed: 'Saving failed.',
-  decisionNeedsIdentity: 'Choose who you are before saving a decision.',
+  decisionNeedsIdentity: 'Choose your role before saving a decision.',
   lastDecision: 'Latest decision',
   noDecisionYet: 'Awaiting a decision',
-  historyTitle: 'Decision history',
-  manage: 'Upload documents',
+  manage: 'Upload concepts',
   demoNotice: 'Demo mode — decisions stay in this browser only.',
   liveNotice: '',
-  loadFailed: 'We could not load the concepts. Showing the demo set.',
-  missingInEnglish: 'Four concepts are Hebrew-only, because no approved English document exists for them.',
+  loadFailed: 'We could not load the concepts.',
+  missingInEnglish: 'Some concepts are Hebrew-only because no approved English document exists.',
   skipToContent: 'Skip to content',
   documents: (count) => (count === 1 ? '1 document' : `${count} documents`),
+  gridView: 'Grid',
+  listView: 'List',
+  documentView: 'Concept document',
+  commentsView: 'Comments',
+  commentsTitle: 'Decision and comments',
+  commentsEmpty: 'No comments yet.',
+  commentsHelp: 'A comment is optional for every decision. You can also add or revise your own comment later.',
+  commentsOptional: 'Optional',
+  commentsPlaceholder: 'Write a clear note for the team…',
+  saveDecision: 'Save decision',
+  addComment: 'Add a comment',
+  saveComment: 'Save comment',
+  editComment: 'Edit my comment',
+  editedComment: 'Edited',
+  commentSaved: 'Comment saved.',
+  chooseDecisionFirst: 'Choose a decision first.',
+};
+
+const he: Strings = {
+  brand: 'חדר הקונספטים',
+  brandNote: 'SINAI',
+  languageName: 'עברית',
+  languageSwitchTo: 'English',
+  languageSwitchLabel: 'Switch to English',
+  identityQuestion: 'מה התפקיד שלך?',
+  identityHelp: 'התפקיד מופיע לצד ההחלטות וההערות שלך.',
+  identityEnter: 'כניסה לחדר',
+  identityChange: 'החלפת תפקיד',
+  identityAdvisorName: 'השם שלך (לא חובה)',
+  people: { management: 'הנהלה', content_editor: 'עורך/ת תוכן', advisor: 'יועץ/ת' },
+  tabs: { pending: 'ממתינים', approved: 'מאושרים', rejected: 'לא אושרו' },
+  categories: {
+    'film-long': 'סרט של 30 דק׳',
+    'film-short': 'סרט קצר',
+    film: 'סרט',
+    series: 'סדרה',
+    digital: 'סרט דיגיטל',
+    podcast: 'פודקאסט',
+  },
+  empty: {
+    pending: 'אין קונספטים שממתינים להחלטה.',
+    approved: 'עוד לא אושר אף קונספט.',
+    rejected: 'אין קונספטים שלא אושרו.',
+  },
+  open: 'פתיחה',
+  close: 'סגירה',
+  prevPage: 'העמוד הקודם',
+  nextPage: 'העמוד הבא',
+  pageOf: (current, total) => `${current} מתוך ${total}`,
+  zoomIn: 'הגדלה',
+  zoomOut: 'הקטנה',
+  loadingDocument: 'טוען מסמך…',
+  documentFailed: 'לא הצלחנו לפתוח את המסמך.',
+  decideHere: 'החלטה',
+  decisionMarker: 'החלטה',
+  decisionFor: 'בחירת החלטה עבור',
+  decisionHelp: 'אחרי הבחירה ייפתח מקום להערה לפני השמירה.',
+  decisionContinue: 'המשך להערות',
+  decisionSaving: 'שומר…',
+  decisionSaved: 'ההחלטה נשמרה.',
+  decisionSavedLocal: 'ההחלטה נשמרה במכשיר הזה.',
+  decisionFailed: 'השמירה נכשלה.',
+  decisionNeedsIdentity: 'כדי לשמור החלטה, בוחרים קודם תפקיד.',
+  lastDecision: 'ההחלטה האחרונה',
+  noDecisionYet: 'ממתין להחלטה',
+  manage: 'העלאת קונספטים',
+  demoNotice: 'מצב הדגמה — ההחלטות נשמרות רק בדפדפן הזה.',
+  liveNotice: '',
+  loadFailed: 'לא הצלחנו לטעון את הקונספטים.',
+  missingInEnglish: 'חלק מהקונספטים קיימים בעברית בלבד כי אין להם מסמך אנגלי מאושר.',
+  skipToContent: 'דילוג לתוכן',
+  documents: (count) => (count === 1 ? 'מסמך אחד' : `${count} מסמכים`),
+  gridView: 'גריד',
+  listView: 'רשימה',
+  documentView: 'מסמך הקונספט',
+  commentsView: 'הערות',
+  commentsTitle: 'החלטה והערות',
+  commentsEmpty: 'עדיין אין הערות.',
+  commentsHelp: 'אפשר להוסיף הערה בכל אחת מההחלטות, וגם להוסיף או לערוך הערה שלך מאוחר יותר.',
+  commentsOptional: 'לא חובה',
+  commentsPlaceholder: 'כתבו הערה ברורה לצוות…',
+  saveDecision: 'שמירת החלטה',
+  addComment: 'הוספת הערה',
+  saveComment: 'שמירת הערה',
+  editComment: 'עריכת ההערה שלי',
+  editedComment: 'נערכה',
+  commentSaved: 'ההערה נשמרה.',
+  chooseDecisionFirst: 'צריך לבחור החלטה קודם.',
 };
 
 export const STRINGS: Record<Locale, Strings> = { he, en };
-
-export function t(locale: Locale) {
-  return STRINGS[locale];
-}
+export function t(locale: Locale) { return STRINGS[locale]; }
