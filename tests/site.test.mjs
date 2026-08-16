@@ -513,3 +513,14 @@ test('robots output follows the configured indexing state', () => {
     assert.equal(robots, 'User-agent: *\nDisallow: /\n');
   }
 });
+
+test('Values Arena is kept in the series category in repeatable database setup', () => {
+  const migration = readFileSync(
+    join(root, 'supabase/migrations/202608160002_values_arena_series.sql'),
+    'utf8',
+  );
+
+  assert.match(migration, /title = 'Values Arena'/);
+  assert.match(migration, /set category = 'series'/);
+  assert.match(migration, /category = 'digital'/);
+});
