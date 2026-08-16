@@ -351,6 +351,8 @@ test('approved concepts expose editorial estimates and sorting without affecting
   assert.match(migration, /Content editor role required/);
   assert.match(migration, /selected_role text/);
   assert.doesNotMatch(migration, /current_role text/);
+  assert.match(migration, /on conflict on constraint concept_assessments_pkey/);
+  assert.doesNotMatch(migration, /on conflict \(concept_id\)/);
   assert.match(migration, /Concept must be approved before assessment/);
 });
 

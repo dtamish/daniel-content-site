@@ -75,7 +75,7 @@ begin
   ) values (
     p_concept_id, p_production_speed, p_budget_level, auth.uid(), now()
   )
-  on conflict (concept_id) do update set
+  on conflict on constraint concept_assessments_pkey do update set
     production_speed = excluded.production_speed,
     budget_level = excluded.budget_level,
     updated_by = excluded.updated_by,
