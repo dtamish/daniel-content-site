@@ -46,6 +46,7 @@ type Strings = {
   decisionSaved: string;
   decisionSavedLocal: string;
   decisionFailed: string;
+  reviewerApprovalRequired: string;
   decisionNeedsIdentity: string;
   lastDecision: string;
   noDecisionYet: string;
@@ -131,6 +132,7 @@ const en: Strings = {
   decisionSaved: 'Decision saved.',
   decisionSavedLocal: 'Decision saved on this device.',
   decisionFailed: 'Saving failed.',
+  reviewerApprovalRequired: 'This browser is awaiting reviewer approval. Your draft is still here; try saving again after access is approved.',
   decisionNeedsIdentity: 'Choose your role before saving a decision.',
   lastDecision: 'Latest decision',
   noDecisionYet: 'Awaiting a decision',
@@ -216,6 +218,7 @@ const he: Strings = {
   decisionSaved: 'ההחלטה נשמרה.',
   decisionSavedLocal: 'ההחלטה נשמרה במכשיר הזה.',
   decisionFailed: 'השמירה נכשלה.',
+  reviewerApprovalRequired: 'הדפדפן הזה עדיין ממתין לאישור גישת סוקר. הטיוטה נשארה כאן; נסו לשמור שוב אחרי אישור הגישה.',
   decisionNeedsIdentity: 'כדי לשמור החלטה, בוחרים קודם תפקיד.',
   lastDecision: 'ההחלטה האחרונה',
   noDecisionYet: 'ממתין להחלטה',

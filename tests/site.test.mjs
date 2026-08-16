@@ -325,6 +325,8 @@ test('review saving avoids recursive policies and keeps upload approval separate
   assert.doesNotMatch(repository, /profiles\(identity_kind\)/);
   assert.match(repository, /reviewer_role/);
   assert.match(repository, /affects_decision/);
+  assert.match(repository, /\.from\('profiles'\)\.select\('approved'\)/);
+  assert.match(repository, /REVIEWER_APPROVAL_REQUIRED/);
 });
 
 test('native modal dialogs own Escape and Tab before the reader keyboard trap', () => {
