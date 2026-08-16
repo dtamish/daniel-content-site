@@ -838,6 +838,9 @@ if (appRoot) {
   el.next.addEventListener('click', () => goTo(view + 1));
 
   window.addEventListener('keydown', (event) => {
+    // Let an open native modal own its focus cycle and Escape key. Without this
+    // guard the reader trap reaches behind reset/identity dialogs.
+    if (root.querySelector<HTMLDialogElement>('dialog[open]')) return;
     if (el.reader.hidden) return;
     if (event.key === 'Escape') { closeReader(); return; }
     if (event.key === 'Tab') {

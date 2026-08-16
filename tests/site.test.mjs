@@ -327,6 +327,15 @@ test('review saving avoids recursive policies and keeps upload approval separate
   assert.match(repository, /affects_decision/);
 });
 
+test('native modal dialogs own Escape and Tab before the reader keyboard trap', () => {
+  const reviewScript = readFileSync(join(root, 'src/scripts/review-app.ts'), 'utf8');
+  const modalGuard = reviewScript.indexOf("root.querySelector<HTMLDialogElement>('dialog[open]')");
+  const readerGuard = reviewScript.indexOf('if (el.reader.hidden) return;', modalGuard);
+
+  assert.ok(modalGuard >= 0);
+  assert.ok(readerGuard > modalGuard);
+});
+
 test('admin offers a manifest-backed bulk import for the prepared concept package', () => {
   const admin = readFileSync(join(dist, 'admin/index.html'), 'utf8');
 
