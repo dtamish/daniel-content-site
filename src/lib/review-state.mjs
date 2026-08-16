@@ -108,6 +108,34 @@ export function conceptsWithStatus(concepts = [], status) {
   return concepts.filter((concept) => conceptStatus(concept) === status);
 }
 
+const ASSESSMENT_RANKS = Object.freeze({
+  speed: Object.freeze({ fast: 0, medium: 1, slow: 2 }),
+  budget: Object.freeze({ low: 0, medium: 1, high: 2 }),
+});
+
+/** Sort approved concepts by editorial estimates; missing estimates always stay last. */
+export function sortApprovedConcepts(concepts = [], mode = 'default') {
+  if (mode === 'default') return [...concepts];
+  const score = (concept, dimension) => {
+    const value = dimension === 'speed'
+      ? concept?.assessment?.productionSpeed
+      : concept?.assessment?.budgetLevel;
+    return ASSESSMENT_RANKS[dimension][value] ?? Number.POSITIVE_INFINITY;
+  };
+  return [...concepts].sort((a, b) => {
+    if (mode === 'speed') return score(a, 'speed') - score(b, 'speed');
+    if (mode === 'budget') return score(a, 'budget') - score(b, 'budget');
+    if (mode === 'viability') {
+      const aTotal = score(a, 'speed') + score(a, 'budget');
+      const bTotal = score(b, 'speed') + score(b, 'budget');
+      return aTotal - bTotal
+        || score(a, 'speed') - score(b, 'speed')
+        || score(a, 'budget') - score(b, 'budget');
+    }
+    return 0;
+  });
+}
+
 export const MAX_DESCRIPTION_LENGTH = 500;
 
 export function isDecision(value) {

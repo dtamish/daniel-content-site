@@ -2,10 +2,13 @@ import * as pdfjs from 'pdfjs-dist';
 import workerUrl from 'pdfjs-dist/build/pdf.worker.mjs?url';
 import {
   CATEGORY_COLOURS, conceptCategory, conceptStatus, countByStatus, conceptsWithStatus,
-  decisionLabels, groupByCategory, latestReview, visibleCommentReviews,
+  decisionLabels, groupByCategory, latestReview, sortApprovedConcepts, visibleCommentReviews,
 } from '../lib/review-state.mjs';
 import { DEFAULT_LOCALE, STRINGS, direction, isLocale, type Locale, type ReviewerRole } from '../lib/i18n';
-import { isSupabaseConfigured, loadConcepts, saveReview, type Identity } from '../lib/concept-repository';
+import {
+  isSupabaseConfigured, loadConcepts, saveConceptAssessment, saveReview,
+  type BudgetLevel, type ConceptAssessment, type Identity, type ProductionSpeed,
+} from '../lib/concept-repository';
 import { withBase } from '../lib/urls';
 
 pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
@@ -18,7 +21,7 @@ type Review = {
 };
 type Concept = {
   id: string; title: string; description: string; priority: number; category: string;
-  bannerUrl: string; pdfUrl: string; reviews: Review[];
+  bannerUrl: string; pdfUrl: string; reviews: Review[]; assessment: ConceptAssessment | null;
 };
 type Status = 'pending' | 'approved' | 'rejected';
 
@@ -42,6 +45,9 @@ if (appRoot) {
     notice: need<HTMLElement>('[data-mode-notice]'),
     tabs: need<HTMLElement>('[data-tabs]'),
     viewButtons: need<HTMLElement>('.catalogue-tools'),
+    approvedSort: need<HTMLElement>('[data-approved-sort]'),
+    approvedSortLabel: need<HTMLElement>('[data-approved-sort-label]'),
+    approvedSortSelect: need<HTMLSelectElement>('[data-approved-sort-select]'),
     identityDialog: need<HTMLDialogElement>('[data-identity-dialog]'),
     identityForm: need<HTMLFormElement>('[data-identity-form]'),
 
@@ -91,6 +97,7 @@ if (appRoot) {
   const cache = new Map<Locale, Concept[]>();
   let tab: Status = 'pending';
   let catalogueView: 'grid' | 'list' = 'grid';
+  let approvedSort: 'default' | 'speed' | 'budget' | 'viability' = 'default';
   let identity: Identity | null = readIdentity();
   let pendingDecision = '';
   let editingDecision = '';
@@ -216,6 +223,10 @@ if (appRoot) {
     el.resetCancel.textContent = strings.resetCancel;
     el.resetSubmit.textContent = strings.resetSubmit;
     el.commentsLock.textContent = strings.commentsLocked;
+    el.approvedSortLabel.textContent = strings.approvedSortLabel;
+    for (const option of el.approvedSortSelect.options) {
+      option.textContent = strings.approvedSorts[option.value as keyof typeof strings.approvedSorts];
+    }
   }
 
   async function setLocale(next: Locale) {
@@ -298,12 +309,22 @@ if (appRoot) {
       button.setAttribute('aria-pressed', String(current));
     }
 
-    const visible = conceptsWithStatus(concepts, tab) as Concept[];
+    const baseVisible = conceptsWithStatus(concepts, tab) as Concept[];
+    const visible = tab === 'approved'
+      ? sortApprovedConcepts(baseVisible, approvedSort) as Concept[]
+      : baseVisible;
+    el.approvedSort.hidden = tab !== 'approved';
     el.grid.replaceChildren();
     el.empty.hidden = visible.length > 0;
     el.empty.textContent = strings.empty[tab];
 
     const labels = decisionLabels(locale) as Record<string, string>;
+    if (tab === 'approved' && approvedSort !== 'default') {
+      const row = create('div', 'group-grid sorted-grid');
+      el.grid.append(row);
+      renderCards(visible, row, labels, '#3d7f73');
+      return;
+    }
     for (const { category, items } of groupByCategory(visible)) {
       const colour = CATEGORY_COLOURS[category as keyof typeof CATEGORY_COLOURS];
       const section = create('section', 'group');
@@ -323,7 +344,8 @@ if (appRoot) {
     for (const concept of visible) {
       const status = conceptStatus(concept);
       const article = create('article', 'card');
-      article.style.setProperty('--group', colour);
+      article.style.setProperty('--group', CATEGORY_COLOURS[conceptCategory(concept) as keyof typeof CATEGORY_COLOURS] ?? colour);
+      if (status === 'approved') article.append(renderAssessment(concept));
       const card = create('button', 'card-open');
       card.type = 'button';
       card.addEventListener('click', () => openReader(concept));
@@ -371,6 +393,78 @@ if (appRoot) {
 
       target.append(article);
     }
+  }
+
+  function renderAssessment(concept: Concept) {
+    const panel = create('div', 'assessment-panel');
+    const chips = create('div', 'assessment-chips');
+    const speedChip = create('span', 'assessment-chip assessment-speed');
+    const budgetChip = create('span', 'assessment-chip assessment-budget');
+    const updateChips = () => {
+      speedChip.textContent = `${strings.assessment.productionSpeed} · ${concept.assessment
+        ? strings.assessment.speed[concept.assessment.productionSpeed]
+        : strings.assessment.unassessed}`;
+      budgetChip.textContent = `${strings.assessment.budget} · ${concept.assessment
+        ? strings.assessment.budgetValues[concept.assessment.budgetLevel]
+        : strings.assessment.unassessed}`;
+    };
+    updateChips();
+    chips.append(speedChip, budgetChip);
+    panel.append(chips);
+
+    if (identity?.kind === 'content_editor') {
+      const editor = create('details', 'assessment-editor');
+      editor.setAttribute('data-assessment-editor', '');
+      editor.append(create('summary', '', strings.assessment.edit));
+      const form = create('form', 'assessment-form');
+      const speed = create('select', 'assessment-select') as HTMLSelectElement;
+      speed.name = 'production-speed';
+      speed.setAttribute('aria-label', strings.assessment.productionSpeed);
+      for (const value of ['fast', 'medium', 'slow'] as ProductionSpeed[]) {
+        const option = new Option(strings.assessment.speed[value], value);
+        option.selected = value === (concept.assessment?.productionSpeed ?? 'medium');
+        speed.add(option);
+      }
+      const budget = create('select', 'assessment-select') as HTMLSelectElement;
+      budget.name = 'budget-level';
+      budget.setAttribute('aria-label', strings.assessment.budget);
+      for (const value of ['low', 'medium', 'high'] as BudgetLevel[]) {
+        const option = new Option(strings.assessment.budgetValues[value], value);
+        option.selected = value === (concept.assessment?.budgetLevel ?? 'medium');
+        budget.add(option);
+      }
+      const save = create('button', 'assessment-save', strings.assessment.save);
+      save.type = 'submit';
+      const status = create('span', 'assessment-status');
+      status.setAttribute('role', 'status');
+      form.append(speed, budget, save, status);
+      form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        if (!identity || identity.kind !== 'content_editor') return;
+        save.setAttribute('disabled', '');
+        status.textContent = strings.assessment.saving;
+        try {
+          const result = await saveConceptAssessment({
+            conceptId: concept.id,
+            productionSpeed: speed.value as ProductionSpeed,
+            budgetLevel: budget.value as BudgetLevel,
+            identity,
+          });
+          concept.assessment = result;
+          updateChips();
+          status.textContent = strings.assessment.saved;
+          if (approvedSort !== 'default') render();
+        } catch (error) {
+          console.error(error);
+          status.textContent = strings.assessment.failed;
+        } finally {
+          save.removeAttribute('disabled');
+        }
+      });
+      editor.append(form);
+      panel.append(editor);
+    }
+    return panel;
   }
 
   // ------------------------------------------------------------------ reader
@@ -826,6 +920,11 @@ if (appRoot) {
     render();
   });
 
+  el.approvedSortSelect.addEventListener('change', () => {
+    approvedSort = el.approvedSortSelect.value as typeof approvedSort;
+    render();
+  });
+
   el.localeToggle.addEventListener('click', () => void setLocale(locale === 'he' ? 'en' : 'he'));
   need<HTMLButtonElement>('[data-change-identity]').addEventListener('click', () => el.identityDialog.showModal());
   need<HTMLButtonElement>('[data-close-reader]').addEventListener('click', closeReader);
@@ -875,6 +974,7 @@ if (appRoot) {
     if (!kind || !(kind in strings.people)) return;
     applyIdentity({ kind, name: identityName(kind, '') });
     el.identityDialog.close();
+    render();
   });
 
   el.decisionForm.addEventListener('change', () => {

@@ -26,8 +26,19 @@ const decisions = decisionLabels(DEFAULT_LOCALE);
 
   <main class="room-main" id="main-content">
     <div class="catalogue-tools" role="group" aria-label="Catalogue view">
-      <button type="button" data-view="grid" class="is-active" aria-pressed="true"><span aria-hidden="true">▦</span><span data-i18n="gridView">{s.gridView}</span></button>
-      <button type="button" data-view="list" aria-pressed="false"><span aria-hidden="true">☷</span><span data-i18n="listView">{s.listView}</span></button>
+      <div class="catalogue-view-buttons">
+        <button type="button" data-view="grid" class="is-active" aria-pressed="true"><span aria-hidden="true">▦</span><span data-i18n="gridView">{s.gridView}</span></button>
+        <button type="button" data-view="list" aria-pressed="false"><span aria-hidden="true">☷</span><span data-i18n="listView">{s.listView}</span></button>
+      </div>
+      <label class="approved-sort" data-approved-sort hidden>
+        <span data-approved-sort-label>{s.approvedSortLabel}</span>
+        <select data-approved-sort-select>
+          <option value="default">{s.approvedSorts.default}</option>
+          <option value="speed">{s.approvedSorts.speed}</option>
+          <option value="budget">{s.approvedSorts.budget}</option>
+          <option value="viability">{s.approvedSorts.viability}</option>
+        </select>
+      </label>
     </div>
     <p class="room-notice" data-mode-notice role="status" hidden></p>
     <section class="room-grid" data-concept-grid aria-live="polite"></section>

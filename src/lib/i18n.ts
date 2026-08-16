@@ -86,6 +86,20 @@ type Strings = {
   resetSaved: string;
   resetFailed: string;
   commentsLocked: string;
+  approvedSortLabel: string;
+  approvedSorts: Record<'default' | 'speed' | 'budget' | 'viability', string>;
+  assessment: {
+    productionSpeed: string;
+    budget: string;
+    edit: string;
+    save: string;
+    saving: string;
+    saved: string;
+    failed: string;
+    unassessed: string;
+    speed: Record<'fast' | 'medium' | 'slow', string>;
+    budgetValues: Record<'low' | 'medium' | 'high', string>;
+  };
 };
 
 const en: Strings = {
@@ -172,6 +186,15 @@ const en: Strings = {
   resetSaved: 'The concept is back in Pending.',
   resetFailed: 'Reset failed.',
   commentsLocked: 'Choose a new decision before adding or editing comments.',
+  approvedSortLabel: 'Sort approved concepts',
+  approvedSorts: { default: 'Default order', speed: 'Production speed', budget: 'Budget', viability: 'Best viability' },
+  assessment: {
+    productionSpeed: 'Production speed', budget: 'Budget', edit: 'Edit estimate',
+    save: 'Save estimate', saving: 'Saving…', saved: 'Estimate saved.',
+    failed: 'Could not save the estimate.', unassessed: 'Not yet estimated',
+    speed: { fast: 'Fast', medium: 'Medium', slow: 'Slow' },
+    budgetValues: { low: 'Low', medium: 'Medium', high: 'High' },
+  },
 };
 
 const he: Strings = {
@@ -258,6 +281,15 @@ const he: Strings = {
   resetSaved: 'הקונספט חזר לממתינים.',
   resetFailed: 'האיפוס נכשל.',
   commentsLocked: 'כדי להוסיף או לערוך הערות צריך לבחור החלטה חדשה.',
+  approvedSortLabel: 'סידור קונספטים מאושרים',
+  approvedSorts: { default: 'סדר רגיל', speed: 'מהירות הפקה', budget: 'תקציב', viability: 'כדאיות' },
+  assessment: {
+    productionSpeed: 'מהירות הפקה', budget: 'תקציב', edit: 'עריכת הערכה',
+    save: 'שמירת הערכה', saving: 'שומר…', saved: 'ההערכה נשמרה.',
+    failed: 'שמירת ההערכה נכשלה.', unassessed: 'טרם הוערך',
+    speed: { fast: 'מהיר', medium: 'בינוני', slow: 'איטי' },
+    budgetValues: { low: 'נמוך', medium: 'בינוני', high: 'גבוה' },
+  },
 };
 
 export const STRINGS: Record<Locale, Strings> = { he, en };

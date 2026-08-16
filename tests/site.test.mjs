@@ -332,6 +332,26 @@ test('review saving stays open to every role while editor upload remains role-sc
   assert.match(repository, /rpc\('set_reviewer_role'/);
 });
 
+test('approved concepts expose editorial estimates and sorting without affecting other tabs', () => {
+  const component = readFileSync(join(root, 'src/components/ReviewApp.astro'), 'utf8');
+  const reviewScript = readFileSync(join(root, 'src/scripts/review-app.ts'), 'utf8');
+  const repository = readFileSync(join(root, 'src/lib/concept-repository.ts'), 'utf8');
+  const migration = readFileSync(join(root, 'supabase/migrations/202608160005_concept_assessments.sql'), 'utf8');
+
+  assert.match(component, /data-approved-sort/);
+  assert.match(component, /value="viability"/);
+  assert.match(reviewScript, /data-assessment-editor/);
+  assert.match(reviewScript, /identity\?\.kind === 'content_editor'/);
+  assert.match(reviewScript, /sortApprovedConcepts/);
+  assert.match(repository, /concept_assessments/);
+  assert.match(repository, /query\(`\$\{BASE\},category,\$\{REVIEWS\}`\)/);
+  assert.match(repository, /set_concept_assessment/);
+  assert.match(migration, /production_speed in \('fast', 'medium', 'slow'\)/);
+  assert.match(migration, /budget_level in \('low', 'medium', 'high'\)/);
+  assert.match(migration, /Content editor role required/);
+  assert.match(migration, /Concept must be approved before assessment/);
+});
+
 test('native modal dialogs own Escape and Tab before the reader keyboard trap', () => {
   const reviewScript = readFileSync(join(root, 'src/scripts/review-app.ts'), 'utf8');
   const modalGuard = reviewScript.indexOf("root.querySelector<HTMLDialogElement>('dialog[open]')");

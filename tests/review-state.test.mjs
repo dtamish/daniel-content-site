@@ -6,6 +6,7 @@ import {
   createReview,
   filterConceptsByLatestDecision,
   getReviewerBadges,
+  sortApprovedConcepts,
   visibleCommentReviews,
   validateConceptDescription,
 } from '../src/lib/review-state.mjs';
@@ -125,6 +126,41 @@ test('adding or editing a comment never changes the project decision', () => {
   ];
 
   assert.equal(conceptStatus({ reviews }), 'approved');
+});
+
+test('approved concepts sort by production speed with unassessed concepts last', () => {
+  const concepts = [
+    { id: 'slow', assessment: { productionSpeed: 'slow', budgetLevel: 'low' } },
+    { id: 'none', assessment: null },
+    { id: 'fast', assessment: { productionSpeed: 'fast', budgetLevel: 'high' } },
+    { id: 'medium', assessment: { productionSpeed: 'medium', budgetLevel: 'medium' } },
+  ];
+
+  assert.deepEqual(sortApprovedConcepts(concepts, 'speed').map(({ id }) => id), ['fast', 'medium', 'slow', 'none']);
+});
+
+test('approved concepts sort by budget from low to high', () => {
+  const concepts = [
+    { id: 'high', assessment: { productionSpeed: 'fast', budgetLevel: 'high' } },
+    { id: 'low', assessment: { productionSpeed: 'slow', budgetLevel: 'low' } },
+    { id: 'medium', assessment: { productionSpeed: 'medium', budgetLevel: 'medium' } },
+  ];
+
+  assert.deepEqual(sortApprovedConcepts(concepts, 'budget').map(({ id }) => id), ['low', 'medium', 'high']);
+});
+
+test('viability prioritizes the combined fastest and cheapest estimates', () => {
+  const concepts = [
+    { id: 'slow-cheap', assessment: { productionSpeed: 'slow', budgetLevel: 'low' } },
+    { id: 'fast-cheap', assessment: { productionSpeed: 'fast', budgetLevel: 'low' } },
+    { id: 'fast-expensive', assessment: { productionSpeed: 'fast', budgetLevel: 'high' } },
+    { id: 'medium-mid', assessment: { productionSpeed: 'medium', budgetLevel: 'medium' } },
+    { id: 'none', assessment: null },
+  ];
+
+  assert.deepEqual(sortApprovedConcepts(concepts, 'viability').map(({ id }) => id), [
+    'fast-cheap', 'fast-expensive', 'medium-mid', 'slow-cheap', 'none',
+  ]);
 });
 
 test('accepts descriptions up to 500 characters and rejects longer text', () => {

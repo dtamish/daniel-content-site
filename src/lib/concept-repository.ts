@@ -3,6 +3,13 @@ import { getSupabaseClient, isSupabaseConfigured } from './supabase-client';
 import { DEFAULT_LOCALE, STRINGS, type Locale, type ReviewerRole } from './i18n';
 
 export type Identity = { kind: ReviewerRole; name: string };
+export type ProductionSpeed = 'fast' | 'medium' | 'slow';
+export type BudgetLevel = 'low' | 'medium' | 'high';
+export type ConceptAssessment = {
+  productionSpeed: ProductionSpeed;
+  budgetLevel: BudgetLevel;
+  updatedAt: string;
+};
 
 type DatabaseReview = {
   id: string;
@@ -27,6 +34,15 @@ type ConceptRow = {
   banner_path: string | null;
   pdf_path: string | null;
   reviews: DatabaseReview[] | null;
+  concept_assessments: {
+    production_speed: ProductionSpeed;
+    budget_level: BudgetLevel;
+    updated_at: string;
+  } | Array<{
+    production_speed: ProductionSpeed;
+    budget_level: BudgetLevel;
+    updated_at: string;
+  }> | null;
 };
 
 
@@ -44,6 +60,15 @@ function compatibleAuthRole(role: ReviewerRole) {
   return 'advisor';
 }
 
+function normalizeAssessment(value: ConceptRow['concept_assessments']): ConceptAssessment | null {
+  const row = Array.isArray(value) ? value[0] : value;
+  return row ? {
+    productionSpeed: row.production_speed,
+    budgetLevel: row.budget_level,
+    updatedAt: row.updated_at,
+  } : null;
+}
+
 async function signedMediaUrl(bucket: string, path: string | null) {
   const client = getSupabaseClient();
   if (!client || !path) return '';
@@ -58,11 +83,13 @@ async function signedMediaUrl(bucket: string, path: string | null) {
  */
 export async function loadConcepts(locale: Locale = DEFAULT_LOCALE) {
   const client = getSupabaseClient();
-  if (!client) return structuredClone(demoConceptsByLocale[locale] ?? demoConceptsByLocale[DEFAULT_LOCALE]);
+  if (!client) return structuredClone(demoConceptsByLocale[locale] ?? demoConceptsByLocale[DEFAULT_LOCALE])
+    .map((concept) => ({ ...concept, assessment: null }));
 
   const { data: sessionData } = await client.auth.getSession();
   const currentUserId = sessionData.session?.user.id ?? null;
   const REVIEWS = 'reviews(id,reviewer_id,reviewer_role,decision,notes,affects_decision,clear_prior_notes,supersedes_review_id,created_at)';
+  const ASSESSMENT = 'concept_assessments(production_speed,budget_level,updated_at)';
   const BASE = 'id,title,description,section,priority,locale,banner_path,pdf_path';
 
   const query = (columns: string) => client
@@ -74,8 +101,13 @@ export async function loadConcepts(locale: Locale = DEFAULT_LOCALE) {
 
   // The category column arrives with its own migration. Until that has been applied the
   // catalogue still loads, ungrouped, rather than the whole room failing to open.
-  let { data, error } = await query(`${BASE},category,${REVIEWS}`);
-  if (error?.code === '42703') ({ data, error } = await query(`${BASE},${REVIEWS}`));
+  let { data, error } = await query(`${BASE},category,${REVIEWS},${ASSESSMENT}`);
+  if (error) {
+    // Assessment support is an additive migration. A stale PostgREST schema cache or
+    // a deploy that lands moments before the migration must not take down the catalogue.
+    ({ data, error } = await query(`${BASE},category,${REVIEWS}`));
+    if (error?.code === '42703') ({ data, error } = await query(`${BASE},${REVIEWS}`));
+  }
   if (error) throw error;
   // A select built at runtime cannot be inferred, so the row shape is stated here.
   const rows = (data ?? []) as unknown as ConceptRow[];
@@ -88,6 +120,7 @@ export async function loadConcepts(locale: Locale = DEFAULT_LOCALE) {
     priority: concept.priority,
     locale: (concept.locale ?? locale) as Locale,
     category: concept.category ?? 'series',
+    assessment: normalizeAssessment(concept.concept_assessments),
     bannerUrl: await signedMediaUrl('concept-banners', concept.banner_path),
     pdfUrl: await signedMediaUrl('concept-pdfs', concept.pdf_path),
     reviews: (concept.reviews ?? []).map((review) => {
@@ -107,6 +140,28 @@ export async function loadConcepts(locale: Locale = DEFAULT_LOCALE) {
       };
     }),
   })));
+}
+
+async function ensureReviewerSession(identity: Identity) {
+  const client = getSupabaseClient();
+  if (!client) throw new Error('Supabase is not configured.');
+
+  let { data: sessionData } = await client.auth.getSession();
+  if (!sessionData.session) {
+    const { data, error } = await client.auth.signInAnonymously({
+      options: { data: { display_name: identity.name, identity_kind: compatibleAuthRole(identity.kind) } },
+    });
+    if (error) throw error;
+    sessionData = { session: data.session };
+  }
+
+  const userId = sessionData.session?.user.id;
+  if (!userId) throw new Error('Could not establish an authenticated identity for saving.');
+  const { error: roleError } = await client.rpc('set_reviewer_role', {
+    requested_kind: identity.kind,
+  });
+  if (roleError) throw roleError;
+  return { client, userId };
 }
 
 export async function saveReview({ conceptId, decision, notes, identity, reviewerId, affectsDecision = true, clearPriorNotes = false, supersedesReviewId = null }: {
@@ -130,24 +185,7 @@ export async function saveReview({ conceptId, decision, notes, identity, reviewe
     return { mode: 'demo' as const, id, reviewerId, reviewerRole: identity.kind, createdAt };
   }
 
-  let { data: sessionData } = await client.auth.getSession();
-  if (!sessionData.session) {
-    const { data, error } = await client.auth.signInAnonymously({
-      options: { data: { display_name: identity.name, identity_kind: compatibleAuthRole(identity.kind) } },
-    });
-    if (error) throw error;
-    sessionData = { session: data.session };
-  }
-
-  const userId = sessionData.session?.user.id;
-  if (!userId) throw new Error('Could not establish an authenticated identity for saving.');
-
-  // The shared link is intentionally open. Persist the role selected in the
-  // visible picker so changing identity also works in an existing session.
-  const { error: roleError } = await client.rpc('set_reviewer_role', {
-    requested_kind: identity.kind,
-  });
-  if (roleError) throw roleError;
+  await ensureReviewerSession(identity);
 
   // The database trigger copies the selected role onto the immutable review row
   // and always binds reviewer_id to the current anonymous session.
@@ -166,6 +204,35 @@ export async function saveReview({ conceptId, decision, notes, identity, reviewe
     reviewerId: data.reviewer_id,
     reviewerRole: normalizeReviewerRole(data.reviewer_role),
     createdAt: data.created_at,
+  };
+}
+
+export async function saveConceptAssessment({ conceptId, productionSpeed, budgetLevel, identity }: {
+  conceptId: string;
+  productionSpeed: ProductionSpeed;
+  budgetLevel: BudgetLevel;
+  identity: Identity;
+}): Promise<ConceptAssessment & { mode: 'demo' | 'supabase' }> {
+  const client = getSupabaseClient();
+  if (!client) {
+    return {
+      mode: 'demo', productionSpeed, budgetLevel, updatedAt: new Date().toISOString(),
+    };
+  }
+
+  await ensureReviewerSession(identity);
+  const { data, error } = await client.rpc('set_concept_assessment', {
+    p_concept_id: conceptId,
+    p_production_speed: productionSpeed,
+    p_budget_level: budgetLevel,
+  }).single();
+  if (error) throw error;
+  const row = data as { production_speed: ProductionSpeed; budget_level: BudgetLevel; updated_at: string };
+  return {
+    mode: 'supabase',
+    productionSpeed: row.production_speed,
+    budgetLevel: row.budget_level,
+    updatedAt: row.updated_at,
   };
 }
 
