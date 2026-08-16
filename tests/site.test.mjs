@@ -212,20 +212,27 @@ test('catalogue supports an explicit grid and compact list view', () => {
   assert.match(reviewScript, /room-view-list/);
 });
 
-test('reader makes document, comments, and the decision destination explicit', () => {
+test('reader uses one clear flow instead of document/comments tabs', () => {
   const home = readFileSync(join(dist, 'index.html'), 'utf8');
   const styles = readFileSync(join(root, 'src/styles/room.css'), 'utf8');
-  assert.match(home, /data-reader-view="document"/);
-  assert.match(home, /data-reader-view="comments"/);
+  const reviewScript = readFileSync(join(root, 'src/scripts/review-app.ts'), 'utf8');
+  assert.doesNotMatch(home, /data-reader-view=/);
+  assert.match(home, /data-open-comments/);
+  assert.match(home, /data-view-document/);
   assert.match(home, /data-comments-panel/);
   assert.match(home, /data-comments-list/);
   assert.match(home, /data-comments-form/);
-  assert.match(styles, /\.reader-view-tabs/);
+  assert.match(home, /data-reset-dialog/);
+  assert.match(home, /name="reset-notes" value="keep"/);
+  assert.match(home, /name="reset-notes" value="clear"/);
+  assert.match(reviewScript, /card-comments/);
+  assert.match(reviewScript, /card-reset/);
+  assert.match(styles, /\.card-actions/);
   assert.match(styles, /\.comment-role-management/);
   assert.match(styles, /\.comment-role-content_editor/);
   assert.match(styles, /\.comment-role-advisor/);
   assert.match(home, /role="dialog" aria-modal="true"/);
-  assert.match(readFileSync(join(root, 'src/scripts/review-app.ts'), 'utf8'), /readerPreviousFocus|event\.key === 'Tab'/);
+  assert.match(reviewScript, /readerPreviousFocus|event\.key === 'Tab'/);
 });
 
 test('the room offers exactly three review tabs and no side drawer', () => {
@@ -302,6 +309,24 @@ test('the deployment remains compatible while hosted editor roles are migrated',
   assert.match(migration, /identity_kind in \('management', 'honi', 'itzik'\)/);
 });
 
+test('review saving avoids recursive policies and keeps upload approval separate', () => {
+  const migration = readFileSync(join(root, 'supabase/migrations/202608160003_review_flow_reset.sql'), 'utf8');
+  const repository = readFileSync(join(root, 'src/lib/concept-repository.ts'), 'utf8');
+
+  assert.match(migration, /drop policy if exists "profiles: read self, published reviewers, or editor"/);
+  assert.match(migration, /identity_kind as reviewer_role|new\.reviewer_role/);
+  assert.doesNotMatch(migration, /Profile must be approved to submit reviews/);
+  assert.match(migration, /p\.approved = true/);
+  assert.match(migration, /Reviewer profile is awaiting approval/);
+  assert.match(migration, /decision in \('priority-approved', 'schedule-approved', 'canceled', 'reset', 'wait'\)/);
+  assert.match(migration, /clear_prior_notes/);
+  assert.match(migration, /affects_decision/);
+  assert.match(migration, /supersedes_review_id/);
+  assert.doesNotMatch(repository, /profiles\(identity_kind\)/);
+  assert.match(repository, /reviewer_role/);
+  assert.match(repository, /affects_decision/);
+});
+
 test('admin offers a manifest-backed bulk import for the prepared concept package', () => {
   const admin = readFileSync(join(dist, 'admin/index.html'), 'utf8');
 
@@ -364,9 +389,10 @@ test('comment revisions remain append-only instead of mutating review history', 
   const reviewScript = readFileSync(join(root, 'src/scripts/review-app.ts'), 'utf8');
   const migration = readFileSync(join(root, 'supabase/migrations/202608060003_append_only_reviews.sql'), 'utf8');
 
-  assert.match(reviewScript, /saveReview\(\{ conceptId: active\.id, decision, notes, identity, reviewerId: localReviewerId \}\)/);
+  assert.match(reviewScript, /saveReview\(\{/);
+  assert.match(reviewScript, /supersedesReviewId: editingReviewId/);
   assert.match(reviewScript, /comment-edit/);
-  assert.match(reviewScript, /if \(review\.isOwn\)/);
+  assert.match(reviewScript, /review\.isOwn && status !== 'pending'/);
   assert.doesNotMatch(reviewScript, /review\.reviewerRole === currentIdentity\.kind/);
   assert.match(reviewScript, /pendingDecision \|\| editingDecision \|\| ownLatestReview\(\)\?\.decision/);
   assert.doesNotMatch(reviewScript, /pendingDecision \|\| latestReview\(active\.reviews\)/);

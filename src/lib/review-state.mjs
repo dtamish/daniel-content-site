@@ -60,11 +60,37 @@ const STATUS_OF_DECISION = Object.freeze({
 export function latestReview(reviews = []) {
   let latest = null;
   for (const review of reviews) {
+    // A later comment or append-only comment edit must never rewrite the
+    // project's decision. Legacy rows have no flag and remain decision events.
+    if (review.affectsDecision === false) continue;
     if (!latest || new Date(review.createdAt).valueOf() >= new Date(latest.createdAt).valueOf()) {
       latest = review;
     }
   }
   return latest;
+}
+
+/**
+ * Returns the visible comment timeline while preserving every row for audit history.
+ * A reset may hide earlier notes, and an edit points to the row it supersedes.
+ */
+export function visibleCommentReviews(reviews = []) {
+  const ordered = [...reviews].sort(
+    (a, b) => new Date(a.createdAt).valueOf() - new Date(b.createdAt).valueOf(),
+  );
+  let start = 0;
+  for (let index = 0; index < ordered.length; index += 1) {
+    if (ordered[index].decision === 'reset' && ordered[index].clearPriorNotes) start = index + 1;
+  }
+  const current = ordered.slice(start);
+  const superseded = new Set(
+    current.map((review) => review.supersedesReviewId).filter(Boolean),
+  );
+  return current.filter((review) => (
+    review.decision !== 'reset'
+    && review.notes?.trim()
+    && !superseded.has(review.id)
+  ));
 }
 
 export function conceptStatus(concept) {

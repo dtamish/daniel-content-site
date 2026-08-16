@@ -5,11 +5,15 @@ import { DEFAULT_LOCALE, STRINGS, type Locale, type ReviewerRole } from './i18n'
 export type Identity = { kind: ReviewerRole; name: string };
 
 type DatabaseReview = {
+  id: string;
   reviewer_id: string;
+  reviewer_role: string;
   decision: string;
   created_at: string;
   notes?: string | null;
-  profiles: { identity_kind: string } | { identity_kind: string }[] | null;
+  affects_decision?: boolean | null;
+  clear_prior_notes?: boolean | null;
+  supersedes_review_id?: string | null;
 };
 
 type ConceptRow = {
@@ -58,7 +62,7 @@ export async function loadConcepts(locale: Locale = DEFAULT_LOCALE) {
 
   const { data: sessionData } = await client.auth.getSession();
   const currentUserId = sessionData.session?.user.id ?? null;
-  const REVIEWS = 'reviews(reviewer_id,decision,notes,created_at,profiles(identity_kind))';
+  const REVIEWS = 'reviews(id,reviewer_id,reviewer_role,decision,notes,affects_decision,clear_prior_notes,supersedes_review_id,created_at)';
   const BASE = 'id,title,description,section,priority,locale,banner_path,pdf_path';
 
   const query = (columns: string) => client
@@ -87,34 +91,43 @@ export async function loadConcepts(locale: Locale = DEFAULT_LOCALE) {
     bannerUrl: await signedMediaUrl('concept-banners', concept.banner_path),
     pdfUrl: await signedMediaUrl('concept-pdfs', concept.pdf_path),
     reviews: (concept.reviews ?? []).map((review) => {
-      const role = normalizeReviewerRole(Array.isArray(review.profiles) ? review.profiles[0]?.identity_kind : review.profiles?.identity_kind);
+      const role = normalizeReviewerRole(review.reviewer_role);
       return {
+        id: review.id,
         reviewerId: review.reviewer_id,
         reviewerName: STRINGS[locale].people[role],
         reviewerRole: role,
         isOwn: review.reviewer_id === currentUserId,
         decision: review.decision,
         notes: review.notes ?? '',
+        affectsDecision: review.affects_decision !== false,
+        clearPriorNotes: review.clear_prior_notes === true,
+        supersedesReviewId: review.supersedes_review_id ?? null,
         createdAt: review.created_at,
       };
     }),
   })));
 }
 
-export async function saveReview({ conceptId, decision, notes, identity, reviewerId }: {
+export async function saveReview({ conceptId, decision, notes, identity, reviewerId, affectsDecision = true, clearPriorNotes = false, supersedesReviewId = null }: {
   conceptId: string;
   decision: string;
   notes: string;
   identity: Identity;
   reviewerId: string;
+  affectsDecision?: boolean;
+  clearPriorNotes?: boolean;
+  supersedesReviewId?: string | null;
 }) {
   const client = getSupabaseClient();
   if (!client) {
     const key = 'concept-approval:demo-reviews';
     const existing = JSON.parse(localStorage.getItem(key) ?? '[]');
-    existing.push({ conceptId, decision, notes, identity, reviewerId, createdAt: new Date().toISOString() });
+    const id = crypto.randomUUID();
+    const createdAt = new Date().toISOString();
+    existing.push({ id, conceptId, decision, notes, identity, reviewerId, affectsDecision, clearPriorNotes, supersedesReviewId, createdAt });
     localStorage.setItem(key, JSON.stringify(existing));
-    return { mode: 'demo' as const };
+    return { mode: 'demo' as const, id, reviewerId, reviewerRole: identity.kind, createdAt };
   }
 
   let { data: sessionData } = await client.auth.getSession();
@@ -131,13 +144,22 @@ export async function saveReview({ conceptId, decision, notes, identity, reviewe
 
   // The database trigger creates the immutable reviewer profile from auth metadata.
   // A browser is never allowed to upsert a display name or grant itself a role.
-  const { error } = await client.from('reviews').insert({
+  const { data, error } = await client.from('reviews').insert({
     concept_id: conceptId,
     decision,
     notes: notes.trim() || null,
-  });
+    affects_decision: affectsDecision,
+    clear_prior_notes: clearPriorNotes,
+    supersedes_review_id: supersedesReviewId,
+  }).select('id,reviewer_id,reviewer_role,decision,notes,affects_decision,clear_prior_notes,supersedes_review_id,created_at').single();
   if (error) throw error;
-  return { mode: 'supabase' as const };
+  return {
+    mode: 'supabase' as const,
+    id: data.id,
+    reviewerId: data.reviewer_id,
+    reviewerRole: normalizeReviewerRole(data.reviewer_role),
+    createdAt: data.created_at,
+  };
 }
 
 export { isSupabaseConfigured };

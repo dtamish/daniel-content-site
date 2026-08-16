@@ -72,6 +72,19 @@ type Strings = {
   editedComment: string;
   commentSaved: string;
   chooseDecisionFirst: string;
+  commentsAction: (count: number) => string;
+  viewDocument: string;
+  resetDecision: string;
+  resetTitle: string;
+  resetHelp: string;
+  resetKeepNotes: string;
+  resetClearNotes: string;
+  resetSubmit: string;
+  resetCancel: string;
+  resetSaving: string;
+  resetSaved: string;
+  resetFailed: string;
+  commentsLocked: string;
 };
 
 const en: Strings = {
@@ -144,6 +157,19 @@ const en: Strings = {
   editedComment: 'Edited',
   commentSaved: 'Comment saved.',
   chooseDecisionFirst: 'Choose a decision first.',
+  commentsAction: (count) => (count ? `Comments (${count})` : 'Add a comment'),
+  viewDocument: 'View concept document',
+  resetDecision: 'Reset decision',
+  resetTitle: 'Reset this decision?',
+  resetHelp: 'The concept will return to Pending. Choose what should happen to its comments.',
+  resetKeepNotes: 'Keep the comments',
+  resetClearNotes: 'Reset the comments too',
+  resetSubmit: 'Reset decision',
+  resetCancel: 'Cancel',
+  resetSaving: 'Resetting…',
+  resetSaved: 'The concept is back in Pending.',
+  resetFailed: 'Reset failed.',
+  commentsLocked: 'Choose a new decision before adding or editing comments.',
 };
 
 const he: Strings = {
@@ -216,6 +242,19 @@ const he: Strings = {
   editedComment: 'נערכה',
   commentSaved: 'ההערה נשמרה.',
   chooseDecisionFirst: 'צריך לבחור החלטה קודם.',
+  commentsAction: (count) => (count ? `הערות (${count})` : 'הוספת הערה'),
+  viewDocument: 'צפייה במסמך הקונספט',
+  resetDecision: 'איפוס החלטה',
+  resetTitle: 'לאפס את ההחלטה?',
+  resetHelp: 'הקונספט יחזור לממתינים. בחרו מה לעשות עם ההערות שלו.',
+  resetKeepNotes: 'לשמור את ההערות',
+  resetClearNotes: 'לאפס גם את ההערות',
+  resetSubmit: 'איפוס ההחלטה',
+  resetCancel: 'ביטול',
+  resetSaving: 'מאפס…',
+  resetSaved: 'הקונספט חזר לממתינים.',
+  resetFailed: 'האיפוס נכשל.',
+  commentsLocked: 'כדי להוסיף או לערוך הערות צריך לבחור החלטה חדשה.',
 };
 
 export const STRINGS: Record<Locale, Strings> = { he, en };

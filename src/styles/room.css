@@ -174,19 +174,13 @@
     text-align: start;
     flex: 1;
   }
-  .card-actions { padding: 0 0.9rem 0.85rem; }
-  .card-undo {
-    width: 100%;
-    min-height: 38px;
-    border: 1px solid var(--line);
-    border-radius: 9px;
-    background: transparent;
-    color: var(--muted);
-    font-size: 0.82rem;
-    transition: color 0.16s ease, border-color 0.16s ease;
-  }
-  .card-undo:hover { color: var(--ink); border-color: var(--accent); }
-  .card-undo:disabled { opacity: 0.5; }
+  .card-actions { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.5rem; padding: 0 0.9rem 0.9rem; }
+  .card-actions button { min-height: 42px; padding: 0 0.8rem; border-radius: 9px; font-size: 0.82rem; font-weight: 650; }
+  .card-comments { border: 1px solid var(--accent); background: var(--accent); color: var(--accent-ink); }
+  .card-reset { border: 1px solid color-mix(in srgb, var(--danger) 60%, var(--line)); background: transparent; color: #ff9b9b; }
+  .card-comments:hover { filter: brightness(1.08); }
+  .card-reset:hover { border-color: var(--danger); color: #ffd0d0; }
+  .card-actions button:disabled { opacity: 0.5; }
   .card-banner {
     aspect-ratio: 1785 / 690;
     background: linear-gradient(140deg, #16202b, #0d1218);
@@ -268,6 +262,16 @@
     transition: opacity 0.16s ease;
   }
   .primary:disabled { opacity: 0.4; }
+  .secondary, .danger, .danger-quiet {
+    min-height: 42px;
+    padding-inline: 0.9rem;
+    border-radius: 10px;
+    font-weight: 600;
+  }
+  .secondary { border: 1px solid var(--line); background: transparent; color: var(--ink); }
+  .danger { border: 1px solid var(--danger); background: var(--danger); color: #160606; }
+  .danger-quiet { border: 1px solid color-mix(in srgb, var(--danger) 60%, var(--line)); background: transparent; color: #ffaaaa; }
+  .reset-buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 0.55rem; }
 
   /* --------------------------------------------------------------- reader */
   body.reader-open { overflow: hidden; }
@@ -297,6 +301,16 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+  .reader-comments-action {
+    min-height: 38px;
+    padding: 0 0.85rem;
+    border: 1px solid var(--accent);
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--accent) 16%, transparent);
+    color: var(--ink);
+    font-weight: 650;
+    white-space: nowrap;
   }
   .reader-count { color: var(--muted); font-size: 0.8rem; font-variant-numeric: tabular-nums; }
   .icon {
@@ -423,17 +437,14 @@
   .room-view-list .card-title { font-size: 0.94rem; }
   .room-view-list .card-category { text-transform: none; white-space: nowrap; }
 
-  /* Reader view switch and comments ------------------------------------ */
-  .reader-view-tabs { display: grid; grid-template-columns: 1fr 1fr; border-bottom: 1px solid #1d2227; background: #0c0e11; }
-  .reader-view-tabs button { display: flex; align-items: center; justify-content: center; gap: 0.5rem; min-height: 48px; border: 0; border-bottom: 3px solid transparent; background: transparent; color: var(--muted); font-weight: 600; }
-  .reader-view-tabs button.is-active { color: var(--ink); border-bottom-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); }
-  .reader-view-tabs b { min-width: 1.35rem; padding: 0.05rem 0.35rem; border-radius: 999px; background: #242a31; font-size: 0.72rem; }
+  /* One clear document → decision → comments flow ---------------------- */
   .reader-document { flex: 1; min-height: 0; display: flex; flex-direction: column; }
   .decision-help { margin-block-start: -0.25rem; color: var(--muted); font-size: 0.86rem; line-height: 1.45; }
   .decide-stop { min-height: 42px; padding: 0.3rem 0.9rem 0.25rem; border-width: 2px; border-color: var(--accent); color: var(--ink); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 12%, transparent); }
   .comments-panel { flex: 1; min-height: 0; overflow: auto; background: #0b0d10; }
   .comments-inner { width: min(760px, 100%); margin-inline: auto; display: grid; gap: 1rem; padding: clamp(1rem, 4vw, 2rem); }
   .comments-heading { display: grid; gap: 0.35rem; }
+  .comments-heading-actions { display: flex; justify-content: space-between; gap: 0.55rem; margin-block-end: 0.45rem; }
   .comments-heading h3 { font-size: 1.35rem; }
   .comments-heading > p:last-child { color: var(--muted); line-height: 1.5; }
   .comments-list { display: grid; gap: 0.7rem; }
@@ -447,7 +458,26 @@
   .comment-body { white-space: pre-wrap; line-height: 1.55; }
   .comment-edit { justify-self: start; border: 0; background: none; color: var(--accent); font-size: 0.78rem; text-decoration: underline; }
   .comments-form { display: grid; gap: 0.7rem; padding-block-start: 0.35rem; border-top: 1px solid #252b32; }
+  .comments-lock { padding: 0.85rem; border: 1px solid #303740; border-radius: 10px; color: var(--muted); background: #101318; }
   .pending-decision { padding: 0.65rem 0.8rem; border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent); border-radius: 10px; background: color-mix(in srgb, var(--accent) 9%, transparent); color: var(--ink); font-size: 0.85rem; }
+
+  @media (max-width: 640px) {
+    .room-main { padding-inline: 0.75rem; }
+    .card-actions { grid-template-columns: 1fr; padding-inline: 0.75rem; }
+    .card-actions button { width: 100%; min-height: 46px; }
+    .reader-bar { flex-wrap: wrap; gap: 0.45rem; }
+    .reader-bar h2 { order: 1; flex-basis: calc(100% - 48px); }
+    .reader-comments-action { order: 3; width: 100%; min-height: 44px; }
+    .reader-zoom, .reader-count { order: 2; }
+    .reader-comments-open .reader-zoom, .reader-comments-open .reader-count { display: none; }
+    .comments-inner { padding: 0.85rem 0.75rem calc(1rem + env(safe-area-inset-bottom)); }
+    .comments-heading-actions { display: grid; grid-template-columns: 1fr; }
+    .comments-heading-actions button { width: 100%; min-height: 46px; }
+    .comment-head { align-items: start; flex-direction: column; gap: 0.2rem; }
+    .comments-form textarea { min-height: 140px; font-size: 16px; }
+    .reset-sheet { width: min(96vw, 420px); }
+    .reset-buttons { grid-template-columns: 1fr; }
+  }
 
   /* Language swap: content fades rather than reloading the page. */
   .room.is-swapping .room-grid, .room.is-swapping .room-tabs { opacity: 0.25; }

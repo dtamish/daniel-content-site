@@ -2,9 +2,11 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   DECISIONS,
+  conceptStatus,
   createReview,
   filterConceptsByLatestDecision,
   getReviewerBadges,
+  visibleCommentReviews,
   validateConceptDescription,
 } from '../src/lib/review-state.mjs';
 
@@ -81,6 +83,48 @@ test('filters concepts by each reviewer latest decision only', () => {
   assert.deepEqual(filterConceptsByLatestDecision(concepts, 'priority-approved').map(({ id }) => id), ['one']);
   assert.deepEqual(filterConceptsByLatestDecision(concepts, 'canceled').map(({ id }) => id), ['two']);
   assert.deepEqual(filterConceptsByLatestDecision(concepts, 'pending').map(({ id }) => id), ['three']);
+});
+
+test('a reset event returns the concept to pending without becoming a fourth user decision', () => {
+  const concept = {
+    reviews: [
+      { id: 'approved', reviewerId: 'a', decision: 'priority-approved', createdAt: '2026-08-01T08:00:00Z' },
+      { id: 'reset', reviewerId: 'a', decision: 'reset', createdAt: '2026-08-01T09:00:00Z' },
+    ],
+  };
+
+  assert.deepEqual(Object.keys(DECISIONS), decisions);
+  assert.equal(conceptStatus(concept), 'pending');
+});
+
+test('resetting notes hides earlier comments while preserving later comments', () => {
+  const comments = visibleCommentReviews([
+    { id: 'old', decision: 'priority-approved', notes: 'old note', createdAt: '2026-08-01T08:00:00Z' },
+    { id: 'reset', decision: 'reset', notes: '', clearPriorNotes: true, createdAt: '2026-08-01T09:00:00Z' },
+    { id: 'new', decision: 'schedule-approved', notes: 'new note', createdAt: '2026-08-01T10:00:00Z' },
+  ]);
+
+  assert.deepEqual(comments.map(({ id }) => id), ['new']);
+});
+
+test('an edited comment replaces the earlier visible version without deleting history', () => {
+  const comments = visibleCommentReviews([
+    { id: 'original', decision: 'priority-approved', notes: 'first draft', createdAt: '2026-08-01T08:00:00Z' },
+    { id: 'revision', supersedesReviewId: 'original', decision: 'priority-approved', notes: 'revised note', createdAt: '2026-08-01T09:00:00Z' },
+  ]);
+
+  assert.deepEqual(comments.map(({ id, notes }) => ({ id, notes })), [
+    { id: 'revision', notes: 'revised note' },
+  ]);
+});
+
+test('adding or editing a comment never changes the project decision', () => {
+  const reviews = [
+    { id: 'decision', reviewerId: 'management', decision: 'schedule-approved', affectsDecision: true, createdAt: '2026-08-16T10:00:00Z' },
+    { id: 'comment', reviewerId: 'advisor', decision: 'canceled', notes: 'A later note', affectsDecision: false, createdAt: '2026-08-16T11:00:00Z' },
+  ];
+
+  assert.equal(conceptStatus({ reviews }), 'approved');
 });
 
 test('accepts descriptions up to 500 characters and rejects longer text', () => {

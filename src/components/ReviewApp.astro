@@ -52,6 +52,7 @@ const decisions = decisionLabels(DEFAULT_LOCALE);
     <div class="reader-bar">
       <button class="icon" type="button" data-close-reader aria-label={s.close}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg></button>
       <h2 id="reader-title" data-reader-title></h2>
+      <button class="reader-comments-action" type="button" data-open-comments hidden>{s.commentsAction(0)}</button>
       <div class="reader-zoom">
         <button class="icon" type="button" data-zoom-out aria-label={s.zoomOut}><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6" /><path d="M8 11h6M20 20l-4.5-4.5" /></svg></button>
         <button class="icon" type="button" data-zoom-in aria-label={s.zoomIn}><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6" /><path d="M8 11h6M11 8v6M20 20l-4.5-4.5" /></svg></button>
@@ -59,10 +60,6 @@ const decisions = decisionLabels(DEFAULT_LOCALE);
       <span class="reader-count" data-page-count></span>
     </div>
 
-    <nav class="reader-view-tabs" aria-label="Concept views">
-      <button type="button" data-reader-view="document" class="is-active" aria-pressed="true"><span aria-hidden="true">▤</span><span data-i18n="documentView">{s.documentView}</span></button>
-      <button type="button" data-reader-view="comments" aria-pressed="false"><span aria-hidden="true">●</span><span data-i18n="commentsView">{s.commentsView}</span><b data-comments-count>0</b></button>
-    </nav>
 
     <div class="reader-document" data-document-panel>
       <div class="reader-stage" data-stage>
@@ -92,11 +89,18 @@ const decisions = decisionLabels(DEFAULT_LOCALE);
 
     <section class="comments-panel" data-comments-panel hidden aria-labelledby="comments-title">
       <div class="comments-inner">
-        <div class="comments-heading"><p class="decide-kicker" data-i18n="commentsTitle">{s.commentsTitle}</p><h3 id="comments-title" data-comments-concept-title></h3><p data-i18n="commentsHelp">{s.commentsHelp}</p></div>
+        <div class="comments-heading">
+          <div class="comments-heading-actions">
+            <button type="button" class="secondary" data-view-document>{s.viewDocument}</button>
+            <button type="button" class="danger-quiet" data-reset-decision hidden>{s.resetDecision}</button>
+          </div>
+          <p class="decide-kicker" data-i18n="commentsTitle">{s.commentsTitle}</p><h3 id="comments-title" data-comments-concept-title></h3><p data-i18n="commentsHelp">{s.commentsHelp}</p>
+        </div>
         <div class="comments-list" data-comments-list></div>
         <p class="comments-empty" data-comments-empty data-i18n="commentsEmpty">{s.commentsEmpty}</p>
         <form class="comments-form" data-comments-form>
           <div class="pending-decision" data-pending-decision hidden></div>
+          <p class="comments-lock" data-comments-lock hidden>{s.commentsLocked}</p>
           <div class="field"><label for="comments-note"><span data-i18n="commentsView">{s.commentsView}</span><small data-i18n="commentsOptional">{s.commentsOptional}</small></label><textarea id="comments-note" name="notes" rows="5" maxlength="1000" data-comments-input placeholder={s.commentsPlaceholder}></textarea></div>
           <button class="primary" type="submit" data-comments-submit>{s.addComment}</button>
           <p class="decide-status" data-comments-status role="status"></p>
@@ -104,5 +108,21 @@ const decisions = decisionLabels(DEFAULT_LOCALE);
       </div>
     </section>
   </div>
+
+  <dialog class="sheet reset-sheet" data-reset-dialog aria-labelledby="reset-title">
+    <form data-reset-form>
+      <h2 id="reset-title" data-i18n="resetTitle">{s.resetTitle}</h2>
+      <p class="sheet-help" data-i18n="resetHelp">{s.resetHelp}</p>
+      <div class="choices reset-choices">
+        <label><input type="radio" name="reset-notes" value="keep" checked /><span data-i18n="resetKeepNotes">{s.resetKeepNotes}</span></label>
+        <label><input type="radio" name="reset-notes" value="clear" /><span data-i18n="resetClearNotes">{s.resetClearNotes}</span></label>
+      </div>
+      <div class="reset-buttons">
+        <button type="button" class="secondary" data-reset-cancel>{s.resetCancel}</button>
+        <button type="submit" class="danger" data-reset-submit>{s.resetSubmit}</button>
+      </div>
+      <p class="decide-status" data-reset-status role="status"></p>
+    </form>
+  </dialog>
 </div>
 <script>import '../scripts/review-app';</script>

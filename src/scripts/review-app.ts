@@ -2,7 +2,7 @@ import * as pdfjs from 'pdfjs-dist';
 import workerUrl from 'pdfjs-dist/build/pdf.worker.mjs?url';
 import {
   CATEGORY_COLOURS, conceptCategory, conceptStatus, countByStatus, conceptsWithStatus,
-  decisionLabels, groupByCategory, latestReview,
+  decisionLabels, groupByCategory, latestReview, visibleCommentReviews,
 } from '../lib/review-state.mjs';
 import { DEFAULT_LOCALE, STRINGS, direction, isLocale, type Locale, type ReviewerRole } from '../lib/i18n';
 import { isSupabaseConfigured, loadConcepts, saveReview, type Identity } from '../lib/concept-repository';
@@ -11,8 +11,10 @@ import { withBase } from '../lib/urls';
 pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
 
 type Review = {
+  id?: string;
   reviewerId: string; reviewerName: string; reviewerRole?: ReviewerRole; isOwn?: boolean;
-  decision: string; notes?: string; createdAt: string;
+  decision: string; notes?: string; affectsDecision?: boolean; clearPriorNotes?: boolean;
+  supersedesReviewId?: string | null; createdAt: string;
 };
 type Concept = {
   id: string; title: string; description: string; priority: number; category: string;
@@ -71,8 +73,16 @@ if (appRoot) {
     commentsStatus: need<HTMLElement>('[data-comments-status]'),
     commentsSubmit: need<HTMLButtonElement>('[data-comments-submit]'),
     pendingDecision: need<HTMLElement>('[data-pending-decision]'),
-    commentsCount: need<HTMLElement>('[data-comments-count]'),
     commentsTitle: need<HTMLElement>('[data-comments-concept-title]'),
+    commentsLock: need<HTMLElement>('[data-comments-lock]'),
+    openComments: need<HTMLButtonElement>('[data-open-comments]'),
+    viewDocument: need<HTMLButtonElement>('[data-view-document]'),
+    resetDecision: need<HTMLButtonElement>('[data-reset-decision]'),
+    resetDialog: need<HTMLDialogElement>('[data-reset-dialog]'),
+    resetForm: need<HTMLFormElement>('[data-reset-form]'),
+    resetCancel: need<HTMLButtonElement>('[data-reset-cancel]'),
+    resetSubmit: need<HTMLButtonElement>('[data-reset-submit]'),
+    resetStatus: need<HTMLElement>('[data-reset-status]'),
   };
 
   let locale: Locale = readLocale();
@@ -84,6 +94,8 @@ if (appRoot) {
   let identity: Identity | null = readIdentity();
   let pendingDecision = '';
   let editingDecision = '';
+  let editingReviewId: string | null = null;
+  let resetTarget: Concept | null = null;
   const localReviewerId = readReviewerId();
   let readerPreviousFocus: HTMLElement | null = null;
 
@@ -171,6 +183,10 @@ if (appRoot) {
     commentsEmpty: () => strings.commentsEmpty,
     commentsHelp: () => strings.commentsHelp,
     commentsOptional: () => strings.commentsOptional,
+    resetTitle: () => strings.resetTitle,
+    resetHelp: () => strings.resetHelp,
+    resetKeepNotes: () => strings.resetKeepNotes,
+    resetClearNotes: () => strings.resetClearNotes,
   };
 
   function applyStrings() {
@@ -195,6 +211,11 @@ if (appRoot) {
     el.notice.textContent = isSupabaseConfigured ? strings.liveNotice : strings.demoNotice;
     el.notice.hidden = !el.notice.textContent;
     el.commentsInput.placeholder = strings.commentsPlaceholder;
+    el.viewDocument.textContent = strings.viewDocument;
+    el.resetDecision.textContent = strings.resetDecision;
+    el.resetCancel.textContent = strings.resetCancel;
+    el.resetSubmit.textContent = strings.resetSubmit;
+    el.commentsLock.textContent = strings.commentsLocked;
   }
 
   async function setLocale(next: Locale) {
@@ -222,12 +243,16 @@ if (appRoot) {
         const role = roleMap[record.identity.kind] ?? record.identity.kind;
         const decision = record.decision;
         concept.reviews.push({
+          id: record.id ?? `legacy:${record.createdAt}`,
           reviewerId: record.reviewerId ?? `legacy:${record.createdAt}`,
           reviewerName: strings.people[role as ReviewerRole],
           reviewerRole: role,
           isOwn: record.reviewerId === localReviewerId,
           decision,
           notes: record.notes ?? '',
+          affectsDecision: record.affectsDecision !== false,
+          clearPriorNotes: record.clearPriorNotes === true,
+          supersedesReviewId: record.supersedesReviewId ?? null,
           createdAt: record.createdAt,
         });
       }
@@ -328,39 +353,64 @@ if (appRoot) {
       card.append(banner, body);
       article.append(card);
 
+      const commentCount = visibleCommentReviews(concept.reviews).length;
+      if (status !== 'pending' || commentCount > 0) {
+        const actions = create('div', 'card-actions');
+        const comments = create('button', 'card-comments', strings.commentsAction(commentCount));
+        comments.type = 'button';
+        comments.addEventListener('click', () => void openReader(concept, 'comments'));
+        actions.append(comments);
+        if (status !== 'pending') {
+          const reset = create('button', 'card-reset', strings.resetDecision);
+          reset.type = 'button';
+          reset.addEventListener('click', () => openResetDialog(concept));
+          actions.append(reset);
+        }
+        article.append(actions);
+      }
+
       target.append(article);
     }
   }
 
   // ------------------------------------------------------------------ reader
+  function openResetDialog(concept: Concept) {
+    resetTarget = concept;
+    el.resetForm.reset();
+    el.resetStatus.textContent = '';
+    el.resetSubmit.disabled = false;
+    el.resetDialog.showModal();
+  }
+
   function switchReaderView(next: 'document' | 'comments') {
     const comments = next === 'comments';
     el.documentPanel.hidden = comments;
     el.commentsPanel.hidden = !comments;
-    for (const button of root.querySelectorAll<HTMLButtonElement>('[data-reader-view]')) {
-      const current = button.dataset.readerView === next;
-      button.classList.toggle('is-active', current);
-      button.setAttribute('aria-pressed', String(current));
+    root.classList.toggle('reader-comments-open', comments);
+    if (comments) {
+      renderComments();
+      el.openComments.hidden = true;
+    } else if (active) {
+      const count = visibleCommentReviews(active.reviews).length;
+      el.openComments.textContent = strings.commentsAction(count);
+      el.openComments.hidden = conceptStatus(active) === 'pending' && count === 0;
     }
-    if (comments) renderComments();
   }
 
   function ownLatestReview() {
     if (!active) return null;
-    return [...active.reviews].reverse().find((review) => review.isOwn) ?? null;
-  }
-
-  function ownLatestComment() {
-    if (!active) return null;
-    return [...active.reviews].reverse().find((review) => review.isOwn && review.notes?.trim()) ?? null;
+    return [...active.reviews].reverse().find((review) => review.isOwn && review.decision !== 'reset') ?? null;
   }
 
   function renderComments() {
     if (!active) return;
     const labels = decisionLabels(locale) as Record<string, string>;
-    const comments = active.reviews.filter((review) => review.notes?.trim());
+    const comments = visibleCommentReviews(active.reviews) as Review[];
+    const status = conceptStatus(active) as Status;
     el.commentsTitle.textContent = active.title;
-    el.commentsCount.textContent = String(comments.length);
+    el.openComments.textContent = strings.commentsAction(comments.length);
+    el.openComments.hidden = root.classList.contains('reader-comments-open') || (status === 'pending' && comments.length === 0);
+    el.resetDecision.hidden = status === 'pending';
     el.commentsList.replaceChildren();
     el.commentsEmpty.hidden = comments.length > 0;
     for (const review of comments) {
@@ -372,12 +422,13 @@ if (appRoot) {
         create('span', '', labels[review.decision] ?? strings.tabs.pending),
       );
       article.append(head, create('p', 'comment-body', review.notes));
-      if (review.isOwn) {
+      if (review.isOwn && status !== 'pending') {
         const edit = create('button', 'comment-edit', strings.editComment);
         edit.type = 'button';
         edit.addEventListener('click', () => {
           el.commentsInput.value = review.notes ?? '';
           editingDecision = review.decision;
+          editingReviewId = review.id ?? null;
           el.commentsInput.focus();
           el.commentsSubmit.textContent = strings.saveComment;
         });
@@ -385,8 +436,11 @@ if (appRoot) {
       }
       el.commentsList.append(article);
     }
-    const own = ownLatestComment();
-    el.commentsSubmit.textContent = pendingDecision ? strings.saveDecision : (own ? strings.saveComment : strings.addComment);
+    const canWrite = Boolean(pendingDecision) || status !== 'pending';
+    el.commentsSubmit.textContent = pendingDecision ? strings.saveDecision : (editingReviewId ? strings.saveComment : strings.addComment);
+    el.commentsSubmit.hidden = !canWrite;
+    el.commentsInput.disabled = !canWrite;
+    el.commentsLock.hidden = canWrite;
     el.pendingDecision.hidden = !pendingDecision;
     el.pendingDecision.textContent = pendingDecision ? `${strings.lastDecision}: ${labels[pendingDecision] ?? pendingDecision}` : '';
   }
@@ -501,11 +555,12 @@ if (appRoot) {
     syncView();
   }
 
-  async function openReader(concept: Concept) {
+  async function openReader(concept: Concept, initialView: 'document' | 'comments' = 'document') {
     readerPreviousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     active = concept;
     pendingDecision = '';
     editingDecision = '';
+    editingReviewId = null;
     view = 0;
     zoom = 1;
     el.readerTitle.textContent = concept.title;
@@ -515,8 +570,7 @@ if (appRoot) {
     el.decisionStatus.textContent = '';
     need<HTMLButtonElement>('[data-decision-form] button[type="submit"]').disabled = true;
     el.reader.hidden = false;
-    switchReaderView('document');
-    renderComments();
+    switchReaderView(initialView);
     document.body.classList.add('reader-open');
     need<HTMLButtonElement>('[data-close-reader]').focus();
     setReaderState(strings.loadingDocument);
@@ -560,6 +614,7 @@ if (appRoot) {
     active = null;
     pendingDecision = '';
     editingDecision = '';
+    editingReviewId = null;
     pageCount = 0;
     view = 0;
     const context = el.canvas.getContext('2d');
@@ -774,9 +829,11 @@ if (appRoot) {
   el.localeToggle.addEventListener('click', () => void setLocale(locale === 'he' ? 'en' : 'he'));
   need<HTMLButtonElement>('[data-change-identity]').addEventListener('click', () => el.identityDialog.showModal());
   need<HTMLButtonElement>('[data-close-reader]').addEventListener('click', closeReader);
-  root.querySelectorAll<HTMLButtonElement>('[data-reader-view]').forEach((button) => {
-    button.addEventListener('click', () => switchReaderView(button.dataset.readerView === 'comments' ? 'comments' : 'document'));
-  });
+  el.openComments.addEventListener('click', () => switchReaderView('comments'));
+  el.viewDocument.addEventListener('click', () => switchReaderView('document'));
+  el.resetDecision.addEventListener('click', () => { if (active) openResetDialog(active); });
+  el.resetCancel.addEventListener('click', () => { resetTarget = null; el.resetDialog.close(); });
+  el.resetDialog.addEventListener('close', () => { resetTarget = null; });
   el.prev.addEventListener('click', () => goTo(view - 1));
   el.next.addEventListener('click', () => goTo(view + 1));
 
@@ -833,10 +890,59 @@ if (appRoot) {
     pendingDecision = String(new FormData(el.decisionForm).get('decision') ?? '');
     if (!pendingDecision) return;
     editingDecision = '';
-    el.commentsInput.value = ownLatestComment()?.notes ?? '';
+    editingReviewId = null;
+    el.commentsInput.value = '';
     el.decisionStatus.textContent = '';
     switchReaderView('comments');
     window.setTimeout(() => el.commentsInput.focus(), 0);
+  });
+
+  el.resetForm.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const concept = resetTarget;
+    if (!concept) return;
+    if (!identity) {
+      el.resetDialog.close();
+      el.identityDialog.showModal();
+      return;
+    }
+    const clearPriorNotes = new FormData(el.resetForm).get('reset-notes') === 'clear';
+    el.resetSubmit.disabled = true;
+    el.resetStatus.textContent = strings.resetSaving;
+    try {
+      const result = await saveReview({
+        conceptId: concept.id,
+        decision: 'reset',
+        notes: '',
+        identity,
+        reviewerId: localReviewerId,
+        clearPriorNotes,
+      });
+      concept.reviews.push({
+        id: result.id,
+        reviewerId: result.reviewerId,
+        reviewerName: strings.people[result.reviewerRole],
+        reviewerRole: result.reviewerRole,
+        isOwn: true,
+        decision: 'reset',
+        notes: '',
+        affectsDecision: true,
+        clearPriorNotes,
+        supersedesReviewId: null,
+        createdAt: result.createdAt,
+      });
+      el.resetStatus.textContent = strings.resetSaved;
+      resetTarget = null;
+      el.resetDialog.close();
+      tab = 'pending';
+      if (active?.id === concept.id) closeReader();
+      render();
+    } catch (error) {
+      el.resetStatus.textContent = error instanceof Error
+        ? `${strings.resetFailed} ${error.message}`
+        : strings.resetFailed;
+      el.resetSubmit.disabled = false;
+    }
   });
 
   el.commentsForm.addEventListener('submit', async (event) => {
@@ -847,6 +953,7 @@ if (appRoot) {
       el.identityDialog.showModal();
       return;
     }
+    const wasDecision = Boolean(pendingDecision);
     const decision = pendingDecision || editingDecision || ownLatestReview()?.decision || '';
     if (!decision) {
       el.commentsStatus.textContent = strings.chooseDecisionFirst;
@@ -858,24 +965,43 @@ if (appRoot) {
     el.commentsSubmit.disabled = true;
     el.commentsStatus.textContent = strings.decisionSaving;
     try {
-      const result = await saveReview({ conceptId: active.id, decision, notes, identity, reviewerId: localReviewerId });
-      active.reviews.push({
+      const result = await saveReview({
+        conceptId: active.id,
+        decision,
+        notes,
+        identity,
         reviewerId: localReviewerId,
-        reviewerName: strings.people[identity.kind],
-        reviewerRole: identity.kind,
+        affectsDecision: wasDecision,
+        supersedesReviewId: editingReviewId,
+      });
+      active.reviews.push({
+        id: result.id,
+        reviewerId: result.reviewerId,
+        reviewerName: strings.people[result.reviewerRole],
+        reviewerRole: result.reviewerRole,
         isOwn: true,
         decision,
         notes,
-        createdAt: new Date().toISOString(),
+        affectsDecision: wasDecision,
+        clearPriorNotes: false,
+        supersedesReviewId: editingReviewId,
+        createdAt: result.createdAt,
       });
       el.commentsStatus.textContent = result.mode === 'demo'
         ? strings.decisionSavedLocal
         : (pendingDecision ? strings.decisionSaved : strings.commentSaved);
       pendingDecision = '';
       editingDecision = '';
+      editingReviewId = null;
       el.commentsInput.value = '';
-      renderComments();
-      render();
+      if (wasDecision) {
+        tab = decision === 'canceled' ? 'rejected' : 'approved';
+        closeReader();
+        render();
+      } else {
+        renderComments();
+        render();
+      }
     } catch (error) {
       el.commentsStatus.textContent = error instanceof Error
         ? `${strings.decisionFailed} ${error.message}`
