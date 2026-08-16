@@ -193,10 +193,15 @@ test('English is the default and Hebrew remains one clear switch away', () => {
 
 test('the room exposes three role names without personal reviewer names', () => {
   const home = readFileSync(join(dist, 'index.html'), 'utf8');
+  const repository = readFileSync(join(root, 'src/lib/concept-repository.ts'), 'utf8');
+  const reviewScript = readFileSync(join(root, 'src/scripts/review-app.ts'), 'utf8');
   assert.match(home, /value="management"/);
   assert.match(home, /value="content_editor"/);
   assert.match(home, /value="advisor"/);
   assert.doesNotMatch(home, /value="honi"|value="itzik"/);
+  assert.doesNotMatch(repository, /profiles\(display_name/);
+  assert.match(repository, /reviewerName: STRINGS\[locale\]\.people\[role\]/);
+  assert.match(reviewScript, /strings\.people\[latestRole\]/);
 });
 
 test('catalogue supports an explicit grid and compact list view', () => {
@@ -219,6 +224,8 @@ test('reader makes document, comments, and the decision destination explicit', (
   assert.match(styles, /\.comment-role-management/);
   assert.match(styles, /\.comment-role-content_editor/);
   assert.match(styles, /\.comment-role-advisor/);
+  assert.match(home, /role="dialog" aria-modal="true"/);
+  assert.match(readFileSync(join(root, 'src/scripts/review-app.ts'), 'utf8'), /readerPreviousFocus|event\.key === 'Tab'/);
 });
 
 test('the room offers exactly three review tabs and no side drawer', () => {
@@ -290,6 +297,9 @@ test('the deployment remains compatible while hosted editor roles are migrated',
   assert.match(repository, /value === 'management' \|\| value === 'honi' \|\| value === 'itzik'/);
   assert.match(repository, /role === 'management'.*return 'honi'/s);
   assert.match(repository, /role === 'content_editor'.*return 'editor'/s);
+  const migration = readFileSync(join(root, 'supabase/migrations/202608160001_roles_and_three_decisions.sql'), 'utf8');
+  assert.match(migration, /identity_kind in \('content_editor', 'editor'\)/);
+  assert.match(migration, /identity_kind in \('management', 'honi', 'itzik'\)/);
 });
 
 test('admin offers a manifest-backed bulk import for the prepared concept package', () => {
@@ -354,8 +364,12 @@ test('comment revisions remain append-only instead of mutating review history', 
   const reviewScript = readFileSync(join(root, 'src/scripts/review-app.ts'), 'utf8');
   const migration = readFileSync(join(root, 'supabase/migrations/202608060003_append_only_reviews.sql'), 'utf8');
 
-  assert.match(reviewScript, /saveReview\(\{ conceptId: active\.id, decision, notes, identity \}\)/);
+  assert.match(reviewScript, /saveReview\(\{ conceptId: active\.id, decision, notes, identity, reviewerId: localReviewerId \}\)/);
   assert.match(reviewScript, /comment-edit/);
+  assert.match(reviewScript, /if \(review\.isOwn\)/);
+  assert.doesNotMatch(reviewScript, /review\.reviewerRole === currentIdentity\.kind/);
+  assert.match(reviewScript, /pendingDecision \|\| editingDecision \|\| ownLatestReview\(\)\?\.decision/);
+  assert.doesNotMatch(reviewScript, /pendingDecision \|\| latestReview\(active\.reviews\)/);
   assert.match(migration, /before update on public\.reviews/);
   assert.match(migration, /Review history is append-only/);
 });

@@ -22,6 +22,7 @@ type Status = 'pending' | 'approved' | 'rejected';
 
 const IDENTITY_KEY = 'concept-approval:identity';
 const LOCALE_KEY = 'concept-approval:locale';
+const REVIEWER_ID_KEY = 'concept-approval:reviewer-id';
 const MAX_ZOOM = 4;
 const MIN_ZOOM = 1;
 
@@ -82,6 +83,9 @@ if (appRoot) {
   let catalogueView: 'grid' | 'list' = 'grid';
   let identity: Identity | null = readIdentity();
   let pendingDecision = '';
+  let editingDecision = '';
+  const localReviewerId = readReviewerId();
+  let readerPreviousFocus: HTMLElement | null = null;
 
   let pdf: pdfjs.PDFDocumentProxy | null = null;
   let loadingTask: pdfjs.PDFDocumentLoadingTask | null = null;
@@ -114,6 +118,14 @@ if (appRoot) {
     } catch {
       return null;
     }
+  }
+
+  function readReviewerId() {
+    const existing = localStorage.getItem(REVIEWER_ID_KEY);
+    if (existing) return existing;
+    const created = crypto.randomUUID();
+    localStorage.setItem(REVIEWER_ID_KEY, created);
+    return created;
   }
 
   function identityName(kind: Identity['kind'], custom: string) {
@@ -208,12 +220,12 @@ if (appRoot) {
         if (!concept) continue;
         const roleMap: Record<string, ReviewerRole> = { honi: 'management', itzik: 'management', editor: 'content_editor', advisor: 'advisor' };
         const role = roleMap[record.identity.kind] ?? record.identity.kind;
-        const decision = record.decision === 'wait' ? 'schedule-approved' : record.decision;
+        const decision = record.decision;
         concept.reviews.push({
-          reviewerId: `local:${role}`,
+          reviewerId: record.reviewerId ?? `legacy:${record.createdAt}`,
           reviewerName: strings.people[role as ReviewerRole],
           reviewerRole: role,
-          isOwn: identity?.kind === role,
+          isOwn: record.reviewerId === localReviewerId,
           decision,
           notes: record.notes ?? '',
           createdAt: record.createdAt,
@@ -306,9 +318,10 @@ if (appRoot) {
       body.append(create('span', 'card-summary', summary(concept.description)));
 
       const latest = latestReview(concept.reviews);
+      const latestRole = (latest?.reviewerRole ?? 'advisor') as ReviewerRole;
       const mark = create('span', `card-status is-${status}`);
       mark.textContent = latest
-        ? `${latest.reviewerName} · ${labels[latest.decision as keyof typeof labels] ?? strings.tabs.pending}`
+        ? `${strings.people[latestRole]} · ${labels[latest.decision as keyof typeof labels] ?? strings.tabs.pending}`
         : strings.noDecisionYet;
       body.append(mark);
 
@@ -332,12 +345,14 @@ if (appRoot) {
     if (comments) renderComments();
   }
 
+  function ownLatestReview() {
+    if (!active) return null;
+    return [...active.reviews].reverse().find((review) => review.isOwn) ?? null;
+  }
+
   function ownLatestComment() {
-    if (!active || !identity) return null;
-    const currentIdentity = identity;
-    return [...active.reviews].reverse().find((review) => review.notes?.trim() && (
-      review.isOwn || (review.reviewerRole === currentIdentity.kind && review.reviewerName === currentIdentity.name)
-    )) ?? null;
+    if (!active) return null;
+    return [...active.reviews].reverse().find((review) => review.isOwn && review.notes?.trim()) ?? null;
   }
 
   function renderComments() {
@@ -357,11 +372,12 @@ if (appRoot) {
         create('span', '', labels[review.decision] ?? strings.tabs.pending),
       );
       article.append(head, create('p', 'comment-body', review.notes));
-      if (review.isOwn || (identity && role === identity.kind && review.reviewerName === identity.name)) {
+      if (review.isOwn) {
         const edit = create('button', 'comment-edit', strings.editComment);
         edit.type = 'button';
         edit.addEventListener('click', () => {
           el.commentsInput.value = review.notes ?? '';
+          editingDecision = review.decision;
           el.commentsInput.focus();
           el.commentsSubmit.textContent = strings.saveComment;
         });
@@ -486,8 +502,10 @@ if (appRoot) {
   }
 
   async function openReader(concept: Concept) {
+    readerPreviousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     active = concept;
     pendingDecision = '';
+    editingDecision = '';
     view = 0;
     zoom = 1;
     el.readerTitle.textContent = concept.title;
@@ -500,6 +518,7 @@ if (appRoot) {
     switchReaderView('document');
     renderComments();
     document.body.classList.add('reader-open');
+    need<HTMLButtonElement>('[data-close-reader]').focus();
     setReaderState(strings.loadingDocument);
 
     if (!concept.pdfUrl) {
@@ -540,12 +559,15 @@ if (appRoot) {
     pdf = null;
     active = null;
     pendingDecision = '';
+    editingDecision = '';
     pageCount = 0;
     view = 0;
     const context = el.canvas.getContext('2d');
     context?.clearRect(0, 0, el.canvas.width, el.canvas.height);
     el.canvas.width = 0;
     el.canvas.height = 0;
+    readerPreviousFocus?.focus();
+    readerPreviousFocus = null;
   }
 
   /** Keeps the same point of the page under the finger or cursor while scaling. */
@@ -761,6 +783,17 @@ if (appRoot) {
   window.addEventListener('keydown', (event) => {
     if (el.reader.hidden) return;
     if (event.key === 'Escape') { closeReader(); return; }
+    if (event.key === 'Tab') {
+      const focusable = [...el.reader.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled]), textarea:not([disabled]), [href], [tabindex]:not([tabindex="-1"])')]
+        .filter((node) => !node.closest('[hidden]') && node.getClientRects().length > 0);
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (!first || !last) { event.preventDefault(); el.reader.focus(); return; }
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+      return;
+    }
+    if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) return;
     const forward = document.documentElement.dir === 'rtl' ? 'ArrowLeft' : 'ArrowRight';
     const back = forward === 'ArrowLeft' ? 'ArrowRight' : 'ArrowLeft';
     if (event.key === forward) goTo(view + 1);
@@ -799,6 +832,7 @@ if (appRoot) {
     }
     pendingDecision = String(new FormData(el.decisionForm).get('decision') ?? '');
     if (!pendingDecision) return;
+    editingDecision = '';
     el.commentsInput.value = ownLatestComment()?.notes ?? '';
     el.decisionStatus.textContent = '';
     switchReaderView('comments');
@@ -813,7 +847,7 @@ if (appRoot) {
       el.identityDialog.showModal();
       return;
     }
-    const decision = pendingDecision || latestReview(active.reviews)?.decision || '';
+    const decision = pendingDecision || editingDecision || ownLatestReview()?.decision || '';
     if (!decision) {
       el.commentsStatus.textContent = strings.chooseDecisionFirst;
       switchReaderView('document');
@@ -824,10 +858,10 @@ if (appRoot) {
     el.commentsSubmit.disabled = true;
     el.commentsStatus.textContent = strings.decisionSaving;
     try {
-      const result = await saveReview({ conceptId: active.id, decision, notes, identity });
+      const result = await saveReview({ conceptId: active.id, decision, notes, identity, reviewerId: localReviewerId });
       active.reviews.push({
-        reviewerId: `current:${identity.kind}:${identity.name}`,
-        reviewerName: identity.name,
+        reviewerId: localReviewerId,
+        reviewerName: strings.people[identity.kind],
         reviewerRole: identity.kind,
         isOwn: true,
         decision,
@@ -838,6 +872,7 @@ if (appRoot) {
         ? strings.decisionSavedLocal
         : (pendingDecision ? strings.decisionSaved : strings.commentSaved);
       pendingDecision = '';
+      editingDecision = '';
       el.commentsInput.value = '';
       renderComments();
       render();

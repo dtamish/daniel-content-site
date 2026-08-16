@@ -1,6 +1,6 @@
 import { demoConceptsByLocale } from '../data/demo-concepts.mjs';
 import { getSupabaseClient, isSupabaseConfigured } from './supabase-client';
-import { DEFAULT_LOCALE, type Locale, type ReviewerRole } from './i18n';
+import { DEFAULT_LOCALE, STRINGS, type Locale, type ReviewerRole } from './i18n';
 
 export type Identity = { kind: ReviewerRole; name: string };
 
@@ -9,7 +9,7 @@ type DatabaseReview = {
   decision: string;
   created_at: string;
   notes?: string | null;
-  profiles: { display_name: string; identity_kind: string } | { display_name: string; identity_kind: string }[] | null;
+  profiles: { identity_kind: string } | { identity_kind: string }[] | null;
 };
 
 type ConceptRow = {
@@ -25,7 +25,6 @@ type ConceptRow = {
   reviews: DatabaseReview[] | null;
 };
 
-const ANONYMOUS_REVIEWER = { he: 'סוקר/ת', en: 'Reviewer' } as const;
 
 function normalizeReviewerRole(value: string | undefined): ReviewerRole {
   if (value === 'content_editor' || value === 'editor') return 'content_editor';
@@ -59,7 +58,7 @@ export async function loadConcepts(locale: Locale = DEFAULT_LOCALE) {
 
   const { data: sessionData } = await client.auth.getSession();
   const currentUserId = sessionData.session?.user.id ?? null;
-  const REVIEWS = 'reviews(reviewer_id,decision,notes,created_at,profiles(display_name,identity_kind))';
+  const REVIEWS = 'reviews(reviewer_id,decision,notes,created_at,profiles(identity_kind))';
   const BASE = 'id,title,description,section,priority,locale,banner_path,pdf_path';
 
   const query = (columns: string) => client
@@ -87,31 +86,33 @@ export async function loadConcepts(locale: Locale = DEFAULT_LOCALE) {
     category: concept.category ?? 'series',
     bannerUrl: await signedMediaUrl('concept-banners', concept.banner_path),
     pdfUrl: await signedMediaUrl('concept-pdfs', concept.pdf_path),
-    reviews: (concept.reviews ?? []).map((review) => ({
-      reviewerId: review.reviewer_id,
-      reviewerName: Array.isArray(review.profiles)
-        ? review.profiles[0]?.display_name ?? ANONYMOUS_REVIEWER[locale]
-        : review.profiles?.display_name ?? ANONYMOUS_REVIEWER[locale],
-      reviewerRole: normalizeReviewerRole(Array.isArray(review.profiles) ? review.profiles[0]?.identity_kind : review.profiles?.identity_kind),
-      isOwn: review.reviewer_id === currentUserId,
-      decision: review.decision,
-      notes: review.notes ?? '',
-      createdAt: review.created_at,
-    })),
+    reviews: (concept.reviews ?? []).map((review) => {
+      const role = normalizeReviewerRole(Array.isArray(review.profiles) ? review.profiles[0]?.identity_kind : review.profiles?.identity_kind);
+      return {
+        reviewerId: review.reviewer_id,
+        reviewerName: STRINGS[locale].people[role],
+        reviewerRole: role,
+        isOwn: review.reviewer_id === currentUserId,
+        decision: review.decision,
+        notes: review.notes ?? '',
+        createdAt: review.created_at,
+      };
+    }),
   })));
 }
 
-export async function saveReview({ conceptId, decision, notes, identity }: {
+export async function saveReview({ conceptId, decision, notes, identity, reviewerId }: {
   conceptId: string;
   decision: string;
   notes: string;
   identity: Identity;
+  reviewerId: string;
 }) {
   const client = getSupabaseClient();
   if (!client) {
     const key = 'concept-approval:demo-reviews';
     const existing = JSON.parse(localStorage.getItem(key) ?? '[]');
-    existing.push({ conceptId, decision, notes, identity, createdAt: new Date().toISOString() });
+    existing.push({ conceptId, decision, notes, identity, reviewerId, createdAt: new Date().toISOString() });
     localStorage.setItem(key, JSON.stringify(existing));
     return { mode: 'demo' as const };
   }

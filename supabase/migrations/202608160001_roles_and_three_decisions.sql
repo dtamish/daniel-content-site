@@ -4,8 +4,8 @@
 alter table public.profiles drop constraint if exists profiles_identity_kind_check;
 update public.profiles
 set identity_kind = case
-  when identity_kind = 'editor' then 'content_editor'
-  when identity_kind in ('honi', 'itzik') then 'management'
+  when identity_kind in ('content_editor', 'editor') then 'content_editor'
+  when identity_kind in ('management', 'honi', 'itzik') then 'management'
   else 'advisor'
 end;
 alter table public.profiles add constraint profiles_identity_kind_check
