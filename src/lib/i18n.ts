@@ -118,7 +118,7 @@ const en: Strings = {
   people: { management: 'Management', content_editor: 'Content editor', advisor: 'Advisor' },
   tabs: { pending: 'Pending', approved: 'Approved', rejected: 'Not approved' },
   categories: {
-    'film-long': '30-minute film',
+    'film-long': 'Long film',
     'film-short': 'Short film',
     film: 'Film',
     series: 'Series',
@@ -214,7 +214,7 @@ const he: Strings = {
   people: { management: 'הנהלה', content_editor: 'עורך/ת תוכן', advisor: 'יועץ/ת' },
   tabs: { pending: 'ממתינים', approved: 'מאושרים', rejected: 'לא אושרו' },
   categories: {
-    'film-long': 'סרט של 30 דק׳',
+    'film-long': 'סרט ארוך',
     'film-short': 'סרט קצר',
     film: 'סרט',
     series: 'סדרה',
