@@ -176,8 +176,16 @@
   .card { border-block-start: 3px solid var(--group, var(--line)); }
   .card:hover { border-color: var(--group, var(--accent)); transform: translateY(-2px); }
   .assessment-panel { padding: 0.7rem 0.8rem; border-block-end: 1px solid var(--line); background: linear-gradient(135deg, color-mix(in srgb, var(--group) 9%, var(--surface)), var(--surface)); }
-  .assessment-chips { display: flex; flex-wrap: wrap; gap: 0.4rem; }
-  .assessment-chip { display: inline-flex; align-items: center; min-height: 28px; padding: 0.28rem 0.62rem; border: 1px solid color-mix(in srgb, var(--group) 38%, var(--line)); border-radius: 999px; background: color-mix(in srgb, var(--group) 12%, transparent); color: var(--ink); font-size: 0.72rem; font-weight: 680; }
+  .assessment-chips { display: grid; grid-template-columns: 1fr 1fr; gap: 0.45rem; }
+  .assessment-chip { display: grid; gap: 0.12rem; min-width: 0; min-height: 48px; padding: 0.45rem 0.62rem; border: 1px solid var(--line); border-radius: 10px; background: #151b21; color: var(--ink); }
+  .assessment-chip.is-category { grid-column: 1 / -1; min-height: 36px; display: flex; align-items: baseline; justify-content: space-between; gap: 0.5rem; background: color-mix(in srgb, var(--group) 10%, #151b21); }
+  .assessment-label { color: #929aa4; font-size: 0.65rem; font-weight: 650; letter-spacing: 0.04em; }
+  .assessment-value { overflow: hidden; color: #f0f3f5; font-size: 0.9rem; line-height: 1.15; text-overflow: ellipsis; white-space: nowrap; }
+  .assessment-chip.is-fast, .assessment-chip.is-low { border-color: #397d68; background: #13261f; }
+  .assessment-chip.is-medium { border-color: #7d6a39; background: #282313; }
+  .assessment-chip.is-slow, .assessment-chip.is-high { border-color: #884c4c; background: #2b1818; }
+  .assessment-chip.is-unassessed { border-color: #4d535b; background: #191d22; }
+  .assessment-chip.is-unassessed .assessment-value { color: #8f969f; }
   .assessment-editor { margin-block-start: 0.55rem; }
   .assessment-editor summary { width: max-content; cursor: pointer; color: var(--accent); font-size: 0.76rem; font-weight: 650; }
   .assessment-form { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.45rem; align-items: center; margin-block-start: 0.5rem; }

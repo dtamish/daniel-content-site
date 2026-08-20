@@ -503,7 +503,8 @@ test('content editors can set category, budget, and timing before approval', () 
   assert.match(repository, /saveConceptEditorialMetadata/);
   assert.match(repository, /set_concept_editorial_metadata/);
   assert.match(repository, /p_category: category/);
-  assert.match(reviewScript, /status === 'approved' \|\| \(identity\?\.kind === 'content_editor' && status === 'pending'\)/);
+  assert.match(reviewScript, /article\.append\(renderAssessment\(concept\)\)/);
+  assert.match(reviewScript, /if \(identity\?\.kind === 'content_editor'\)/);
   assert.match(reviewScript, /category\.name = 'category'/);
   assert.match(reviewScript, /concept\.category = result\.category/);
   assert.match(migration, /p_category text/);
@@ -529,6 +530,15 @@ test('Pending exposes the same assessment sorting as Approved', () => {
   assert.match(reviewScript, /tab !== 'rejected'\s*\? sortApprovedConcepts/);
   assert.match(reviewScript, /approvedSort\.hidden = tab === 'rejected'/);
   assert.match(reviewScript, /approvedSort !== 'default'/);
+});
+
+test('every concept card shows its timing and budget estimate at a glance', () => {
+  const reviewScript = readFileSync(join(root, 'src/scripts/review-app.ts'), 'utf8');
+  const styles = readFileSync(join(root, 'src/styles/room.css'), 'utf8');
+  assert.match(reviewScript, /article\.append\(renderAssessment\(concept\)\)/);
+  assert.match(reviewScript, /assessment-value/);
+  assert.match(styles, /assessment-chip\.is-fast/);
+  assert.match(styles, /assessment-chip\.is-high/);
 });
 
 test('draft content cannot leak into public output', () => {

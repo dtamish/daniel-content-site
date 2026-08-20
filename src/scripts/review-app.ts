@@ -382,9 +382,7 @@ if (appRoot) {
       article.style.setProperty('--group', editorialDraft
         ? colour
         : (CATEGORY_COLOURS[conceptCategory(concept) as keyof typeof CATEGORY_COLOURS] ?? colour));
-      if (status === 'approved' || (identity?.kind === 'content_editor' && status === 'pending')) {
-        article.append(renderAssessment(concept));
-      }
+      article.append(renderAssessment(concept));
       const card = create('button', 'card-open');
       card.type = 'button';
       card.addEventListener('click', () => openReader(concept));
@@ -443,14 +441,18 @@ if (appRoot) {
     const speedChip = create('span', 'assessment-chip assessment-speed');
     const budgetChip = create('span', 'assessment-chip assessment-budget');
     const categoryChip = create('span', 'assessment-chip assessment-category');
+    const updateChip = (chip: HTMLElement, label: string, value: string, level: string) => {
+      chip.className = `assessment-chip is-${level}`;
+      chip.replaceChildren(create('span', 'assessment-label', label), create('strong', 'assessment-value', value));
+    };
     const updateChips = () => {
-      categoryChip.textContent = `${strings.assessment.category} · ${strings.categories[concept.category]}`;
-      speedChip.textContent = `${strings.assessment.productionSpeed} · ${concept.assessment
-        ? strings.assessment.speed[concept.assessment.productionSpeed]
-        : strings.assessment.unassessed}`;
-      budgetChip.textContent = `${strings.assessment.budget} · ${concept.assessment
-        ? strings.assessment.budgetValues[concept.assessment.budgetLevel]
-        : strings.assessment.unassessed}`;
+      const speed = concept.assessment?.productionSpeed ?? 'unassessed';
+      const budget = concept.assessment?.budgetLevel ?? 'unassessed';
+      updateChip(categoryChip, strings.assessment.category, strings.categories[concept.category], 'category');
+      updateChip(speedChip, strings.assessment.productionSpeed,
+        concept.assessment ? strings.assessment.speed[concept.assessment.productionSpeed] : strings.assessment.unassessed, speed);
+      updateChip(budgetChip, strings.assessment.budget,
+        concept.assessment ? strings.assessment.budgetValues[concept.assessment.budgetLevel] : strings.assessment.unassessed, budget);
     };
     updateChips();
     chips.append(categoryChip, speedChip, budgetChip);
