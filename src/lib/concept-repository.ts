@@ -29,6 +29,7 @@ type ConceptRow = {
   description: string;
   section: string;
   priority: number;
+  publication_status: 'draft' | 'published';
   locale?: string | null;
   category?: string | null;
   banner_path: string | null;
@@ -81,23 +82,28 @@ async function signedMediaUrl(bucket: string, path: string | null) {
  * identity: the same idea has an independent record, PDF and banner per language, and a
  * concept with no approved document in a language simply does not exist there.
  */
-export async function loadConcepts(locale: Locale = DEFAULT_LOCALE) {
+export async function loadConcepts(locale: Locale = DEFAULT_LOCALE, identity: Identity | null = null) {
   const client = getSupabaseClient();
   if (!client) return structuredClone(demoConceptsByLocale[locale] ?? demoConceptsByLocale[DEFAULT_LOCALE])
-    .map((concept) => ({ ...concept, assessment: null }));
+    .map((concept) => ({ ...concept, publicationStatus: 'published' as const, assessment: null }));
 
+  if (identity) await ensureReviewerSession(identity);
   const { data: sessionData } = await client.auth.getSession();
   const currentUserId = sessionData.session?.user.id ?? null;
   const REVIEWS = 'reviews(id,reviewer_id,reviewer_role,decision,notes,affects_decision,clear_prior_notes,supersedes_review_id,created_at)';
   const ASSESSMENT = 'concept_assessments(production_speed,budget_level,updated_at)';
-  const BASE = 'id,title,description,section,priority,locale,banner_path,pdf_path';
+  const BASE = 'id,title,description,section,priority,publication_status,locale,banner_path,pdf_path';
 
-  const query = (columns: string) => client
-    .from('concepts')
-    .select(columns)
-    .eq('publication_status', 'published')
-    .eq('locale', locale)
-    .order('priority', { ascending: true });
+  const query = (columns: string) => {
+    const catalogue = client
+      .from('concepts')
+      .select(columns)
+      .eq('locale', locale)
+      .order('priority', { ascending: true });
+    return identity?.kind === 'content_editor'
+      ? catalogue.in('publication_status', ['published', 'draft'])
+      : catalogue.eq('publication_status', 'published');
+  };
 
   // The category column arrives with its own migration. Until that has been applied the
   // catalogue still loads, ungrouped, rather than the whole room failing to open.
@@ -118,6 +124,7 @@ export async function loadConcepts(locale: Locale = DEFAULT_LOCALE) {
     description: concept.description,
     section: concept.section,
     priority: concept.priority,
+    publicationStatus: concept.publication_status,
     locale: (concept.locale ?? locale) as Locale,
     category: concept.category ?? 'series',
     assessment: normalizeAssessment(concept.concept_assessments),
@@ -164,6 +171,65 @@ async function ensureReviewerSession(identity: Identity) {
   return { client, userId };
 }
 
+type SupabaseClient = NonNullable<ReturnType<typeof getSupabaseClient>>;
+
+async function restoreConceptPublicationStatus(
+  client: SupabaseClient,
+  conceptId: string,
+  publicationStatus: 'draft' | 'published',
+) {
+  const { error } = await client.from('concepts')
+    .update({ publication_status: publicationStatus })
+    .eq('id', conceptId)
+    .select('id')
+    .single();
+  if (error) throw error;
+}
+
+async function insertReviewRecord(client: SupabaseClient, payload: {
+  conceptId: string; decision: string; notes: string; affectsDecision: boolean;
+  clearPriorNotes: boolean; supersedesReviewId: string | null;
+}) {
+  return client.from('reviews').insert({
+    concept_id: payload.conceptId,
+    decision: payload.decision,
+    notes: payload.notes.trim() || null,
+    affects_decision: payload.affectsDecision,
+    clear_prior_notes: payload.clearPriorNotes,
+    supersedes_review_id: payload.supersedesReviewId,
+  }).select('id,reviewer_id,reviewer_role,decision,notes,affects_decision,clear_prior_notes,supersedes_review_id,created_at').single();
+}
+
+async function saveEditoriallyGatedReview(client: SupabaseClient, payload: {
+  conceptId: string; decision: string; notes: string; affectsDecision: boolean;
+  clearPriorNotes: boolean; supersedesReviewId: string | null;
+}) {
+  const { data: concept, error: readError } = await client.from('concepts')
+    .select('publication_status')
+    .eq('id', payload.conceptId)
+    .single();
+  if (readError) throw readError;
+  const previousStatus = concept.publication_status as 'draft' | 'published';
+  const approvedForWiderReview = ['priority-approved', 'schedule-approved'].includes(payload.decision);
+  const desiredStatus = approvedForWiderReview ? 'published' : 'draft';
+
+  // Existing RLS accepts review rows only for published concepts. The concept is exposed
+  // only for the insert and immediately settles to the editorial decision; failures restore it.
+  try {
+    if (previousStatus !== 'published') {
+      await restoreConceptPublicationStatus(client, payload.conceptId, 'published');
+    }
+    const result = await insertReviewRecord(client, payload);
+    if (desiredStatus !== 'published') {
+      await restoreConceptPublicationStatus(client, payload.conceptId, 'draft');
+    }
+    return result;
+  } catch (error) {
+    await restoreConceptPublicationStatus(client, payload.conceptId, previousStatus);
+    throw error;
+  }
+}
+
 export async function saveReview({ conceptId, decision, notes, identity, reviewerId, affectsDecision = true, clearPriorNotes = false, supersedesReviewId = null }: {
   conceptId: string;
   decision: string;
@@ -189,14 +255,10 @@ export async function saveReview({ conceptId, decision, notes, identity, reviewe
 
   // The database trigger copies the selected role onto the immutable review row
   // and always binds reviewer_id to the current anonymous session.
-  const { data, error } = await client.from('reviews').insert({
-    concept_id: conceptId,
-    decision,
-    notes: notes.trim() || null,
-    affects_decision: affectsDecision,
-    clear_prior_notes: clearPriorNotes,
-    supersedes_review_id: supersedesReviewId,
-  }).select('id,reviewer_id,reviewer_role,decision,notes,affects_decision,clear_prior_notes,supersedes_review_id,created_at').single();
+  const payload = { conceptId, decision, notes, affectsDecision, clearPriorNotes, supersedesReviewId };
+  const { data, error } = identity.kind === 'content_editor' && affectsDecision && !supersedesReviewId
+    ? await saveEditoriallyGatedReview(client, payload)
+    : await insertReviewRecord(client, payload);
   if (error) throw error;
   return {
     mode: 'supabase' as const,

@@ -50,6 +50,7 @@ type Strings = {
   decisionNeedsIdentity: string;
   lastDecision: string;
   noDecisionYet: string;
+  editorialReviewOnly: string;
   manage: string;
   demoNotice: string;
   liveNotice: string;
@@ -150,6 +151,7 @@ const en: Strings = {
   decisionNeedsIdentity: 'Choose your role before saving a decision.',
   lastDecision: 'Latest decision',
   noDecisionYet: 'Awaiting a decision',
+  editorialReviewOnly: 'Content team review — hidden from management and advisors',
   manage: 'Upload concepts',
   demoNotice: 'Demo mode — decisions stay in this browser only.',
   liveNotice: '',
@@ -245,6 +247,7 @@ const he: Strings = {
   decisionNeedsIdentity: 'כדי לשמור החלטה, בוחרים קודם תפקיד.',
   lastDecision: 'ההחלטה האחרונה',
   noDecisionYet: 'ממתין להחלטה',
+  editorialReviewOnly: 'סינון צוות תוכן — מוסתר מהנהלה ומיועצים',
   manage: 'העלאת קונספטים',
   demoNotice: 'מצב הדגמה — ההחלטות נשמרות רק בדפדפן הזה.',
   liveNotice: '',

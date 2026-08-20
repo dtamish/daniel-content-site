@@ -477,6 +477,24 @@ test('concept cards preserve the source banner composition', () => {
   assert.match(globals, /--accent: #ff7a1a/);
 });
 
+test('content editors own a private editorial gate before concepts reach management and advisors', () => {
+  const repository = readFileSync(join(root, 'src/lib/concept-repository.ts'), 'utf8');
+  const reviewScript = readFileSync(join(root, 'src/scripts/review-app.ts'), 'utf8');
+  const admin = readFileSync(join(root, 'tools/concept-admin.mjs'), 'utf8');
+
+  assert.match(repository, /loadConcepts\(locale: Locale = DEFAULT_LOCALE, identity: Identity \| null = null\)/);
+  assert.match(repository, /identity\?\.kind === 'content_editor'/);
+  assert.match(repository, /\.in\('publication_status', \['published', 'draft'\]\)/);
+  assert.match(repository, /publication_status/);
+  assert.match(repository, /async function saveEditoriallyGatedReview/);
+  assert.match(repository, /const desiredStatus = approvedForWiderReview \? 'published' : 'draft'/);
+  assert.match(repository, /await restoreConceptPublicationStatus/);
+  assert.match(reviewScript, /loadConcepts\(locale, identity\)/);
+  assert.match(reviewScript, /publicationStatus === 'draft'/);
+  assert.match(reviewScript, /strings\.editorialReviewOnly/);
+  assert.match(admin, /--stage editorial\|shared/);
+});
+
 test('draft content cannot leak into public output', () => {
   const output = walk(dist)
     .filter((path) => ['.html', '.xml', '.txt'].includes(extname(path)))

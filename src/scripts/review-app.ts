@@ -21,6 +21,7 @@ type Review = {
 };
 type Concept = {
   id: string; title: string; description: string; priority: number; category: string;
+  publicationStatus: 'draft' | 'published';
   bannerUrl: string; pdfUrl: string; reviews: Review[]; assessment: ConceptAssessment | null;
 };
 type Status = 'pending' | 'approved' | 'rejected';
@@ -94,7 +95,7 @@ if (appRoot) {
   let locale: Locale = readLocale();
   let strings = STRINGS[locale];
   let concepts: Concept[] = [];
-  const cache = new Map<Locale, Concept[]>();
+  const cache = new Map<string, Concept[]>();
   let tab: Status = 'pending';
   let catalogueView: 'grid' | 'list' = 'grid';
   let approvedSort: 'default' | 'speed' | 'budget' | 'viability' = 'default';
@@ -274,20 +275,21 @@ if (appRoot) {
   }
 
   async function loadCatalogue() {
-    const cached = cache.get(locale);
+    const cacheKey = `${locale}:${identity?.kind ?? 'none'}`;
+    const cached = cache.get(cacheKey);
     if (cached) {
       concepts = cached;
       return;
     }
     try {
-      concepts = mergeDemoReviews((await loadConcepts(locale)) as Concept[]);
+      concepts = mergeDemoReviews((await loadConcepts(locale, identity)) as Concept[]);
     } catch (error) {
       console.error(error);
       concepts = [];
       el.notice.textContent = strings.loadFailed;
       el.notice.hidden = false;
     }
-    cache.set(locale, concepts);
+    cache.set(cacheKey, concepts);
   }
 
   // ------------------------------------------------------------------ render
@@ -361,6 +363,9 @@ if (appRoot) {
       }
       const body = create('span', 'card-body');
       body.append(create('span', 'card-title', concept.title));
+      if (concept.publicationStatus === 'draft') {
+        body.append(create('span', 'card-status is-editorial', strings.editorialReviewOnly));
+      }
       body.append(create('span', 'card-category', strings.categories[conceptCategory(concept) as keyof typeof strings.categories]));
       body.append(create('span', 'card-summary', summary(concept.description)));
 
@@ -968,12 +973,14 @@ if (appRoot) {
     resizeTimer = window.setTimeout(() => void requestPaint(), 140);
   });
 
-  el.identityForm.addEventListener('submit', (event) => {
+  el.identityForm.addEventListener('submit', async (event) => {
     event.preventDefault();
     const kind = String(new FormData(el.identityForm).get('identity')) as Identity['kind'];
     if (!kind || !(kind in strings.people)) return;
     applyIdentity({ kind, name: identityName(kind, '') });
     el.identityDialog.close();
+    cache.clear();
+    await loadCatalogue();
     render();
   });
 
@@ -1021,6 +1028,7 @@ if (appRoot) {
         reviewerId: localReviewerId,
         clearPriorNotes,
       });
+      if (identity.kind === 'content_editor') concept.publicationStatus = 'draft';
       concept.reviews.push({
         id: result.id,
         reviewerId: result.reviewerId,
@@ -1077,6 +1085,11 @@ if (appRoot) {
         affectsDecision: wasDecision,
         supersedesReviewId: editingReviewId,
       });
+      if (identity.kind === 'content_editor' && wasDecision) {
+        active.publicationStatus = ['priority-approved', 'schedule-approved'].includes(decision)
+          ? 'published'
+          : 'draft';
+      }
       active.reviews.push({
         id: result.id,
         reviewerId: result.reviewerId,

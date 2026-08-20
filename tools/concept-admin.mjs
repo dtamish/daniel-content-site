@@ -14,7 +14,7 @@ function usage() {
   node tools/concept-admin.mjs find <text>
   node tools/concept-admin.mjs import <folder> [--locale he|en] [--publish]
   node tools/concept-admin.mjs sync <folder> [--locale he|en] [--apply]
-  node tools/concept-admin.mjs set <concept-id> [--status draft|published] [--section queue|library] [--priority 0..9999]
+  node tools/concept-admin.mjs set <concept-id> [--status draft|published] [--stage editorial|shared] [--section queue|library] [--priority 0..9999]
   node tools/concept-admin.mjs review <concept-id> --decision priority-approved|schedule-approved|wait|canceled [--notes <text>]
   node tools/concept-admin.mjs fetch <concept-id> --asset banner|pdf --out <file>
   node tools/concept-admin.mjs delete <concept-id> --confirm <concept-id>`);
@@ -200,11 +200,17 @@ if (command === 'list') {
   if (!target) usage();
   const patch = {};
   const status = option(args, '--status');
+  const stage = option(args, '--stage');
   const section = option(args, '--section');
   const priority = option(args, '--priority');
   if (status) {
     if (!['draft', 'published'].includes(status)) throw new Error('Status must be draft or published.');
     patch.publication_status = status;
+  }
+  if (stage) {
+    if (!['editorial', 'shared'].includes(stage)) throw new Error('Stage must be editorial or shared.');
+    if (status) throw new Error('Use either --status or --stage, not both.');
+    patch.publication_status = stage === 'editorial' ? 'draft' : 'published';
   }
   if (section) {
     if (!['queue', 'library'].includes(section)) throw new Error('Section must be queue or library.');
