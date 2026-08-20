@@ -170,9 +170,9 @@
   .assessment-chip { display: inline-flex; align-items: center; min-height: 28px; padding: 0.28rem 0.62rem; border: 1px solid color-mix(in srgb, var(--group) 38%, var(--line)); border-radius: 999px; background: color-mix(in srgb, var(--group) 12%, transparent); color: var(--ink); font-size: 0.72rem; font-weight: 680; }
   .assessment-editor { margin-block-start: 0.55rem; }
   .assessment-editor summary { width: max-content; cursor: pointer; color: var(--accent); font-size: 0.76rem; font-weight: 650; }
-  .assessment-form { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; gap: 0.45rem; align-items: center; margin-block-start: 0.5rem; }
+  .assessment-form { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.45rem; align-items: center; margin-block-start: 0.5rem; }
   .assessment-select, .approved-sort select { min-height: 38px; border: 1px solid var(--line); border-radius: 9px; background: #11171d; color: var(--ink); padding-inline: 0.58rem; }
-  .assessment-save { min-height: 38px; padding-inline: 0.7rem; border: 0; border-radius: 9px; background: var(--accent); color: var(--accent-ink); font-weight: 700; }
+  .assessment-save { grid-column: 1 / -1; min-height: 38px; padding-inline: 0.7rem; border: 0; border-radius: 9px; background: var(--accent); color: var(--accent-ink); font-weight: 700; }
   .assessment-save:disabled { opacity: 0.55; }
   .assessment-status { grid-column: 1 / -1; min-height: 1em; color: var(--muted); font-size: 0.73rem; }
   .card-open {

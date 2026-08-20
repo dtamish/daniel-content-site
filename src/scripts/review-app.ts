@@ -6,8 +6,8 @@ import {
 } from '../lib/review-state.mjs';
 import { DEFAULT_LOCALE, STRINGS, direction, isLocale, type Locale, type ReviewerRole } from '../lib/i18n';
 import {
-  isSupabaseConfigured, loadConcepts, saveConceptAssessment, saveReview,
-  type BudgetLevel, type ConceptAssessment, type Identity, type ProductionSpeed,
+  isSupabaseConfigured, loadConcepts, saveConceptEditorialMetadata, saveReview,
+  type BudgetLevel, type ConceptAssessment, type ConceptCategory, type Identity, type ProductionSpeed,
 } from '../lib/concept-repository';
 import { withBase } from '../lib/urls';
 
@@ -20,7 +20,7 @@ type Review = {
   supersedesReviewId?: string | null; createdAt: string;
 };
 type Concept = {
-  id: string; title: string; description: string; priority: number; category: string;
+  id: string; title: string; description: string; priority: number; category: ConceptCategory;
   publicationStatus: 'draft' | 'published';
   bannerUrl: string; pdfUrl: string; reviews: Review[]; assessment: ConceptAssessment | null;
 };
@@ -347,7 +347,9 @@ if (appRoot) {
       const status = conceptStatus(concept);
       const article = create('article', 'card');
       article.style.setProperty('--group', CATEGORY_COLOURS[conceptCategory(concept) as keyof typeof CATEGORY_COLOURS] ?? colour);
-      if (status === 'approved') article.append(renderAssessment(concept));
+      if (status === 'approved' || (identity?.kind === 'content_editor' && status === 'pending')) {
+        article.append(renderAssessment(concept));
+      }
       const card = create('button', 'card-open');
       card.type = 'button';
       card.addEventListener('click', () => openReader(concept));
@@ -405,7 +407,9 @@ if (appRoot) {
     const chips = create('div', 'assessment-chips');
     const speedChip = create('span', 'assessment-chip assessment-speed');
     const budgetChip = create('span', 'assessment-chip assessment-budget');
+    const categoryChip = create('span', 'assessment-chip assessment-category');
     const updateChips = () => {
+      categoryChip.textContent = `${strings.assessment.category} · ${strings.categories[concept.category]}`;
       speedChip.textContent = `${strings.assessment.productionSpeed} · ${concept.assessment
         ? strings.assessment.speed[concept.assessment.productionSpeed]
         : strings.assessment.unassessed}`;
@@ -414,7 +418,7 @@ if (appRoot) {
         : strings.assessment.unassessed}`;
     };
     updateChips();
-    chips.append(speedChip, budgetChip);
+    chips.append(categoryChip, speedChip, budgetChip);
     panel.append(chips);
 
     if (identity?.kind === 'content_editor') {
@@ -422,6 +426,14 @@ if (appRoot) {
       editor.setAttribute('data-assessment-editor', '');
       editor.append(create('summary', '', strings.assessment.edit));
       const form = create('form', 'assessment-form');
+      const category = create('select', 'assessment-select') as HTMLSelectElement;
+      category.name = 'category';
+      category.setAttribute('aria-label', strings.assessment.category);
+      for (const value of ['series', 'film', 'film-short', 'film-long', 'digital', 'podcast'] as ConceptCategory[]) {
+        const option = new Option(strings.categories[value], value);
+        option.selected = value === concept.category;
+        category.add(option);
+      }
       const speed = create('select', 'assessment-select') as HTMLSelectElement;
       speed.name = 'production-speed';
       speed.setAttribute('aria-label', strings.assessment.productionSpeed);
@@ -442,23 +454,25 @@ if (appRoot) {
       save.type = 'submit';
       const status = create('span', 'assessment-status');
       status.setAttribute('role', 'status');
-      form.append(speed, budget, save, status);
+      form.append(category, speed, budget, save, status);
       form.addEventListener('submit', async (event) => {
         event.preventDefault();
         if (!identity || identity.kind !== 'content_editor') return;
         save.setAttribute('disabled', '');
         status.textContent = strings.assessment.saving;
         try {
-          const result = await saveConceptAssessment({
+          const result = await saveConceptEditorialMetadata({
             conceptId: concept.id,
+            category: category.value as ConceptCategory,
             productionSpeed: speed.value as ProductionSpeed,
             budgetLevel: budget.value as BudgetLevel,
             identity,
           });
+          concept.category = result.category;
           concept.assessment = result;
           updateChips();
           status.textContent = strings.assessment.saved;
-          if (approvedSort !== 'default') render();
+          render();
         } catch (error) {
           console.error(error);
           status.textContent = strings.assessment.failed;

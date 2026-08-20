@@ -5,6 +5,7 @@ import { DEFAULT_LOCALE, STRINGS, type Locale, type ReviewerRole } from './i18n'
 export type Identity = { kind: ReviewerRole; name: string };
 export type ProductionSpeed = 'fast' | 'medium' | 'slow';
 export type BudgetLevel = 'low' | 'medium' | 'high';
+export type ConceptCategory = 'series' | 'film' | 'film-short' | 'film-long' | 'digital' | 'podcast';
 export type ConceptAssessment = {
   productionSpeed: ProductionSpeed;
   budgetLevel: BudgetLevel;
@@ -292,6 +293,43 @@ export async function saveConceptAssessment({ conceptId, productionSpeed, budget
   const row = data as { production_speed: ProductionSpeed; budget_level: BudgetLevel; updated_at: string };
   return {
     mode: 'supabase',
+    productionSpeed: row.production_speed,
+    budgetLevel: row.budget_level,
+    updatedAt: row.updated_at,
+  };
+}
+
+export async function saveConceptEditorialMetadata({ conceptId, category, productionSpeed, budgetLevel, identity }: {
+  conceptId: string;
+  category: ConceptCategory;
+  productionSpeed: ProductionSpeed;
+  budgetLevel: BudgetLevel;
+  identity: Identity;
+}): Promise<ConceptAssessment & { category: ConceptCategory; mode: 'demo' | 'supabase' }> {
+  const client = getSupabaseClient();
+  if (!client) {
+    return {
+      mode: 'demo', category, productionSpeed, budgetLevel, updatedAt: new Date().toISOString(),
+    };
+  }
+
+  await ensureReviewerSession(identity);
+  const { data, error } = await client.rpc('set_concept_editorial_metadata', {
+    p_concept_id: conceptId,
+    p_category: category,
+    p_production_speed: productionSpeed,
+    p_budget_level: budgetLevel,
+  }).single();
+  if (error) throw error;
+  const row = data as {
+    category: ConceptCategory;
+    production_speed: ProductionSpeed;
+    budget_level: BudgetLevel;
+    updated_at: string;
+  };
+  return {
+    mode: 'supabase',
+    category: row.category,
     productionSpeed: row.production_speed,
     budgetLevel: row.budget_level,
     updatedAt: row.updated_at,

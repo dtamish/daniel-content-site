@@ -495,6 +495,24 @@ test('content editors own a private editorial gate before concepts reach managem
   assert.match(admin, /--stage editorial\|shared/);
 });
 
+test('content editors can set category, budget, and timing before approval', () => {
+  const repository = readFileSync(join(root, 'src/lib/concept-repository.ts'), 'utf8');
+  const reviewScript = readFileSync(join(root, 'src/scripts/review-app.ts'), 'utf8');
+  const migration = readFileSync(join(root, 'supabase/migrations/202608200001_preapproval_editorial_metadata.sql'), 'utf8');
+
+  assert.match(repository, /saveConceptEditorialMetadata/);
+  assert.match(repository, /set_concept_editorial_metadata/);
+  assert.match(repository, /p_category: category/);
+  assert.match(reviewScript, /status === 'approved' \|\| \(identity\?\.kind === 'content_editor' && status === 'pending'\)/);
+  assert.match(reviewScript, /category\.name = 'category'/);
+  assert.match(reviewScript, /concept\.category = result\.category/);
+  assert.match(migration, /p_category text/);
+  assert.match(migration, /p_production_speed text/);
+  assert.match(migration, /p_budget_level text/);
+  assert.match(migration, /selected_role <> 'content_editor'/);
+  assert.doesNotMatch(migration, /Concept must be approved before assessment/);
+});
+
 test('draft content cannot leak into public output', () => {
   const output = walk(dist)
     .filter((path) => ['.html', '.xml', '.txt'].includes(extname(path)))

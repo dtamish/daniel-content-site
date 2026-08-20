@@ -90,6 +90,7 @@ type Strings = {
   approvedSortLabel: string;
   approvedSorts: Record<'default' | 'speed' | 'budget' | 'viability', string>;
   assessment: {
+    category: string;
     productionSpeed: string;
     budget: string;
     edit: string;
@@ -191,7 +192,7 @@ const en: Strings = {
   approvedSortLabel: 'Sort approved concepts',
   approvedSorts: { default: 'Default order', speed: 'Production speed', budget: 'Budget', viability: 'Best viability' },
   assessment: {
-    productionSpeed: 'Production speed', budget: 'Budget', edit: 'Edit estimate',
+    category: 'Content type', productionSpeed: 'Production time', budget: 'Budget', edit: 'Edit before approval',
     save: 'Save estimate', saving: 'Saving…', saved: 'Estimate saved.',
     failed: 'Could not save the estimate.', unassessed: 'Not yet estimated',
     speed: { fast: 'Fast', medium: 'Medium', slow: 'Slow' },
@@ -287,7 +288,7 @@ const he: Strings = {
   approvedSortLabel: 'סידור קונספטים מאושרים',
   approvedSorts: { default: 'סדר רגיל', speed: 'מהירות הפקה', budget: 'תקציב', viability: 'כדאיות' },
   assessment: {
-    productionSpeed: 'מהירות הפקה', budget: 'תקציב', edit: 'עריכת הערכה',
+    category: 'קטגוריה', productionSpeed: 'זמן הפקה', budget: 'תקציב', edit: 'עריכה לפני אישור',
     save: 'שמירת הערכה', saving: 'שומר…', saved: 'ההערכה נשמרה.',
     failed: 'שמירת ההערכה נכשלה.', unassessed: 'טרם הוערך',
     speed: { fast: 'מהיר', medium: 'בינוני', slow: 'איטי' },
