@@ -318,10 +318,10 @@ if (appRoot) {
     }
 
     const baseVisible = conceptsWithStatus(concepts, tab) as Concept[];
-    const visible = tab === 'approved'
+    const visible = tab !== 'rejected'
       ? sortApprovedConcepts(baseVisible, approvedSort) as Concept[]
       : baseVisible;
-    el.approvedSort.hidden = tab !== 'approved';
+    el.approvedSort.hidden = tab === 'rejected';
     el.grid.replaceChildren();
     el.empty.hidden = visible.length > 0;
     el.empty.textContent = strings.empty[tab];
@@ -333,10 +333,11 @@ if (appRoot) {
     const sharedConcepts = editorialDrafts.length
       ? visible.filter((concept) => concept.publicationStatus !== 'draft')
       : visible;
-    if (tab === 'approved' && approvedSort !== 'default') {
+    if (approvedSort !== 'default') {
       const row = create('div', 'group-grid sorted-grid');
       el.grid.append(row);
       renderCards(sharedConcepts, row, labels, '#3d7f73');
+      if (editorialDrafts.length) renderEditorialQueue(editorialDrafts, labels);
       return;
     }
     renderCategoryGroups(sharedConcepts, labels);

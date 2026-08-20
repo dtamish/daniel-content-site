@@ -524,6 +524,13 @@ test('editorial drafts form a grey bottom queue with an explicit Pending approva
   assert.match(styles, /grayscale\(1\)/);
 });
 
+test('Pending exposes the same assessment sorting as Approved', () => {
+  const reviewScript = readFileSync(join(root, 'src/scripts/review-app.ts'), 'utf8');
+  assert.match(reviewScript, /tab !== 'rejected'\s*\? sortApprovedConcepts/);
+  assert.match(reviewScript, /approvedSort\.hidden = tab === 'rejected'/);
+  assert.match(reviewScript, /approvedSort !== 'default'/);
+});
+
 test('draft content cannot leak into public output', () => {
   const output = walk(dist)
     .filter((path) => ['.html', '.xml', '.txt'].includes(extname(path)))
