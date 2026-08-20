@@ -6,7 +6,7 @@ import {
 } from '../lib/review-state.mjs';
 import { DEFAULT_LOCALE, STRINGS, direction, isLocale, type Locale, type ReviewerRole } from '../lib/i18n';
 import {
-  isSupabaseConfigured, loadConcepts, saveConceptEditorialMetadata, saveReview,
+  isSupabaseConfigured, loadConcepts, publishConceptForPending, saveConceptEditorialMetadata, saveReview,
   type BudgetLevel, type ConceptAssessment, type ConceptCategory, type Identity, type ProductionSpeed,
 } from '../lib/concept-repository';
 import { withBase } from '../lib/urls';
@@ -59,6 +59,7 @@ if (appRoot) {
     localeLabel: need<HTMLElement>('[data-locale-label]'),
     reader: need<HTMLElement>('[data-reader]'),
     readerTitle: need<HTMLElement>('[data-reader-title]'),
+    editorialReaderBadge: need<HTMLElement>('[data-editorial-reader-badge]'),
     pageCount: need<HTMLElement>('[data-page-count]'),
     stage: need<HTMLElement>('[data-stage]'),
     track: need<HTMLElement>('[data-track]'),
@@ -70,6 +71,11 @@ if (appRoot) {
     next: need<HTMLButtonElement>('[data-next]'),
     decisionForm: need<HTMLFormElement>('[data-decision-form]'),
     decisionTitle: need<HTMLElement>('[data-decision-title]'),
+    decisionKicker: need<HTMLElement>('[data-decision-kicker]'),
+    decisionHelp: need<HTMLElement>('[data-decision-help]'),
+    decisionOptions: need<HTMLElement>('[data-decision-options]'),
+    decisionSubmit: need<HTMLButtonElement>('[data-decision-submit]'),
+    editorialApprove: need<HTMLButtonElement>('[data-editorial-approve]'),
     decisionStatus: need<HTMLElement>('[data-decision-status]'),
     documentPanel: need<HTMLElement>('[data-document-panel]'),
     commentsPanel: need<HTMLElement>('[data-comments-panel]'),
@@ -321,32 +327,60 @@ if (appRoot) {
     el.empty.textContent = strings.empty[tab];
 
     const labels = decisionLabels(locale) as Record<string, string>;
+    const editorialDrafts = identity?.kind === 'content_editor' && tab === 'pending'
+      ? visible.filter((concept) => concept.publicationStatus === 'draft')
+      : [];
+    const sharedConcepts = editorialDrafts.length
+      ? visible.filter((concept) => concept.publicationStatus !== 'draft')
+      : visible;
     if (tab === 'approved' && approvedSort !== 'default') {
       const row = create('div', 'group-grid sorted-grid');
       el.grid.append(row);
-      renderCards(visible, row, labels, '#3d7f73');
+      renderCards(sharedConcepts, row, labels, '#3d7f73');
       return;
     }
-    for (const { category, items } of groupByCategory(visible)) {
+    renderCategoryGroups(sharedConcepts, labels);
+    if (editorialDrafts.length) renderEditorialQueue(editorialDrafts, labels);
+  }
+
+  function renderCategoryGroups(items: Concept[], labels: Record<string, string>) {
+    for (const { category, items: categoryItems } of groupByCategory(items)) {
       const colour = CATEGORY_COLOURS[category as keyof typeof CATEGORY_COLOURS];
       const section = create('section', 'group');
       section.style.setProperty('--group', colour);
       const head = create('h2', 'group-head');
       head.append(create('span', 'group-dot'),
                   create('span', 'group-name', strings.categories[category as keyof typeof strings.categories]),
-                  create('b', 'group-count', String(items.length)));
+                  create('b', 'group-count', String(categoryItems.length)));
       const row = create('div', 'group-grid');
       section.append(head, row);
       el.grid.append(section);
-      renderCards(items, row, labels, colour);
+      renderCards(categoryItems, row, labels, colour);
     }
+  }
+
+  function renderEditorialQueue(items: Concept[], labels: Record<string, string>) {
+    const section = create('section', 'group editorial-queue');
+    section.style.setProperty('--group', '#737982');
+    const head = create('div', 'editorial-queue-head');
+    const title = create('h2', 'group-head');
+    title.append(create('span', 'group-dot'), create('span', 'group-name', strings.editorialQueueTitle),
+                 create('b', 'group-count', String(items.length)));
+    head.append(title, create('p', 'editorial-queue-help', strings.editorialQueueHelp));
+    const row = create('div', 'group-grid');
+    section.append(head, row);
+    el.grid.append(section);
+    renderCards(items, row, labels, '#737982');
   }
 
   function renderCards(visible: Concept[], target: HTMLElement, labels: Record<string, string>, colour: string) {
     for (const concept of visible) {
       const status = conceptStatus(concept);
-      const article = create('article', 'card');
-      article.style.setProperty('--group', CATEGORY_COLOURS[conceptCategory(concept) as keyof typeof CATEGORY_COLOURS] ?? colour);
+      const editorialDraft = concept.publicationStatus === 'draft';
+      const article = create('article', `card${editorialDraft ? ' is-editorial-draft' : ''}`);
+      article.style.setProperty('--group', editorialDraft
+        ? colour
+        : (CATEGORY_COLOURS[conceptCategory(concept) as keyof typeof CATEGORY_COLOURS] ?? colour));
       if (status === 'approved' || (identity?.kind === 'content_editor' && status === 'pending')) {
         article.append(renderAssessment(concept));
       }
@@ -635,7 +669,10 @@ if (appRoot) {
     // pager rather than one more anonymous dot.
     const decide = create('button', `decide-stop${view === pageCount ? ' is-on' : ''}`);
     decide.type = 'button';
-    decide.append(create('span', 'decide-icon'), create('span', 'decide-cap', strings.decisionMarker));
+    const decisionMarker = identity?.kind === 'content_editor' && active?.publicationStatus === 'draft'
+      ? strings.editorialApprove
+      : strings.decisionMarker;
+    decide.append(create('span', 'decide-icon'), create('span', 'decide-cap', decisionMarker));
     decide.addEventListener('click', () => goTo(pageCount));
     el.dots.append(decide);
   }
@@ -668,6 +705,19 @@ if (appRoot) {
     syncView();
   }
 
+  function configureDecisionStage(concept: Concept) {
+    const editorialDraft = identity?.kind === 'content_editor' && concept.publicationStatus === 'draft';
+    el.editorialReaderBadge.hidden = !editorialDraft;
+    el.editorialReaderBadge.textContent = editorialDraft ? strings.editorialReviewOnly : '';
+    el.decisionKicker.textContent = editorialDraft ? strings.editorialReaderKicker : strings.decisionFor;
+    el.decisionHelp.textContent = editorialDraft ? strings.editorialReaderHelp : strings.decisionHelp;
+    el.decisionOptions.hidden = editorialDraft;
+    el.decisionSubmit.hidden = editorialDraft;
+    el.editorialApprove.hidden = !editorialDraft;
+    el.editorialApprove.textContent = strings.editorialApprove;
+    el.editorialApprove.disabled = false;
+  }
+
   async function openReader(concept: Concept, initialView: 'document' | 'comments' = 'document') {
     readerPreviousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     active = concept;
@@ -679,9 +729,10 @@ if (appRoot) {
     el.readerTitle.textContent = concept.title;
     el.decisionTitle.textContent = concept.title;
     el.decisionForm.reset();
+    configureDecisionStage(concept);
     el.commentsForm.reset();
     el.decisionStatus.textContent = '';
-    need<HTMLButtonElement>('[data-decision-form] button[type="submit"]').disabled = true;
+    el.decisionSubmit.disabled = true;
     el.reader.hidden = false;
     switchReaderView(initialView);
     document.body.classList.add('reader-open');
@@ -1000,7 +1051,31 @@ if (appRoot) {
 
   el.decisionForm.addEventListener('change', () => {
     const chosen = new FormData(el.decisionForm).get('decision');
-    need<HTMLButtonElement>('[data-decision-form] button[type="submit"]').disabled = !chosen;
+    el.decisionSubmit.disabled = !chosen;
+  });
+
+  el.editorialApprove.addEventListener('click', async () => {
+    const concept = active;
+    if (!concept || !identity || identity.kind !== 'content_editor' || concept.publicationStatus !== 'draft') return;
+    el.editorialApprove.disabled = true;
+    el.editorialApprove.textContent = strings.editorialApproving;
+    el.decisionStatus.textContent = '';
+    try {
+      await publishConceptForPending({ conceptId: concept.id, identity });
+      concept.publicationStatus = 'published';
+      el.editorialApprove.textContent = strings.editorialApproved;
+      tab = 'pending';
+      window.setTimeout(() => {
+        if (active?.id === concept.id) closeReader();
+        render();
+      }, 450);
+    } catch (error) {
+      el.editorialApprove.disabled = false;
+      el.editorialApprove.textContent = strings.editorialApprove;
+      el.decisionStatus.textContent = error instanceof Error
+        ? `${strings.editorialApprovalFailed} ${error.message}`
+        : strings.editorialApprovalFailed;
+    }
   });
 
   el.decisionForm.addEventListener('submit', (event) => {

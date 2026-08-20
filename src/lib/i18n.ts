@@ -51,6 +51,14 @@ type Strings = {
   lastDecision: string;
   noDecisionYet: string;
   editorialReviewOnly: string;
+  editorialQueueTitle: string;
+  editorialQueueHelp: string;
+  editorialReaderKicker: string;
+  editorialReaderHelp: string;
+  editorialApprove: string;
+  editorialApproving: string;
+  editorialApproved: string;
+  editorialApprovalFailed: string;
   manage: string;
   demoNotice: string;
   liveNotice: string;
@@ -153,6 +161,14 @@ const en: Strings = {
   lastDecision: 'Latest decision',
   noDecisionYet: 'Awaiting a decision',
   editorialReviewOnly: 'Content team review — hidden from management and advisors',
+  editorialQueueTitle: 'Awaiting content team approval',
+  editorialQueueHelp: 'Internal concepts. Open a document and approve it before it appears in Pending for management and advisors.',
+  editorialReaderKicker: 'Content team gate',
+  editorialReaderHelp: 'This concept is still hidden. Approving it moves it to Pending for management and advisors; it does not approve production.',
+  editorialApprove: 'Approve for display in Pending',
+  editorialApproving: 'Moving to Pending…',
+  editorialApproved: 'The concept is now visible in Pending.',
+  editorialApprovalFailed: 'Could not move the concept to Pending.',
   manage: 'Upload concepts',
   demoNotice: 'Demo mode — decisions stay in this browser only.',
   liveNotice: '',
@@ -249,6 +265,14 @@ const he: Strings = {
   lastDecision: 'ההחלטה האחרונה',
   noDecisionYet: 'ממתין להחלטה',
   editorialReviewOnly: 'סינון צוות תוכן — מוסתר מהנהלה ומיועצים',
+  editorialQueueTitle: 'ממתינים לאישור צוות התוכן',
+  editorialQueueHelp: 'קונספטים פנימיים. נכנסים למסמך ומאשרים אותו לפני שיופיע באזור הממתינים של ההנהלה והיועצים.',
+  editorialReaderKicker: 'שער אישור צוות התוכן',
+  editorialReaderHelp: 'הקונספט עדיין מוסתר. האישור יעביר אותו לאזור הממתינים של ההנהלה והיועצים — זה אינו אישור להפקה.',
+  editorialApprove: 'אישור להצגה באזור הממתינים',
+  editorialApproving: 'מעביר לאזור הממתינים…',
+  editorialApproved: 'הקונספט מוצג עכשיו באזור הממתינים.',
+  editorialApprovalFailed: 'לא הצלחנו להעביר את הקונספט לאזור הממתינים.',
   manage: 'העלאת קונספטים',
   demoNotice: 'מצב הדגמה — ההחלטות נשמרות רק בדפדפן הזה.',
   liveNotice: '',

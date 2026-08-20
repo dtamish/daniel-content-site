@@ -513,6 +513,17 @@ test('content editors can set category, budget, and timing before approval', () 
   assert.doesNotMatch(migration, /Concept must be approved before assessment/);
 });
 
+test('editorial drafts form a grey bottom queue with an explicit Pending approval action', () => {
+  const repository = readFileSync(join(root, 'src/lib/concept-repository.ts'), 'utf8');
+  const reviewScript = readFileSync(join(root, 'src/scripts/review-app.ts'), 'utf8');
+  const styles = readFileSync(join(root, 'src/styles/room.css'), 'utf8');
+  assert.match(repository, /publishConceptForPending/);
+  assert.match(reviewScript, /renderEditorialQueue/);
+  assert.match(reviewScript, /data-editorial-approve/);
+  assert.match(styles, /editorial-queue/);
+  assert.match(styles, /grayscale\(1\)/);
+});
+
 test('draft content cannot leak into public output', () => {
   const output = walk(dist)
     .filter((path) => ['.html', '.xml', '.txt'].includes(extname(path)))

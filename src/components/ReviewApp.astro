@@ -63,6 +63,7 @@ const decisions = decisionLabels(DEFAULT_LOCALE);
     <div class="reader-bar">
       <button class="icon" type="button" data-close-reader aria-label={s.close}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg></button>
       <h2 id="reader-title" data-reader-title></h2>
+      <span class="reader-editorial-badge" data-editorial-reader-badge hidden></span>
       <button class="reader-comments-action" type="button" data-open-comments hidden>{s.commentsAction(0)}</button>
       <div class="reader-zoom">
         <button class="icon" type="button" data-zoom-out aria-label={s.zoomOut}><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6" /><path d="M8 11h6M20 20l-4.5-4.5" /></svg></button>
@@ -78,13 +79,14 @@ const decisions = decisionLabels(DEFAULT_LOCALE);
           <div class="reader-slide" data-page-slide><canvas data-page-canvas></canvas></div>
           <div class="reader-slide reader-decide" data-decision-slide>
             <form class="decide" data-decision-form>
-              <p class="decide-kicker" data-i18n="decisionFor">{s.decisionFor}</p>
+              <p class="decide-kicker" data-decision-kicker data-i18n="decisionFor">{s.decisionFor}</p>
               <h3 data-decision-title></h3>
-              <p class="decision-help" data-i18n="decisionHelp">{s.decisionHelp}</p>
-              <div class="decide-options">
+              <p class="decision-help" data-decision-help data-i18n="decisionHelp">{s.decisionHelp}</p>
+              <div class="decide-options" data-decision-options>
                 {Object.entries(decisions).map(([value, label]) => <label><input type="radio" name="decision" value={value} required /><span data-decision-label={value}>{label}</span></label>)}
               </div>
-              <button class="primary" type="submit" disabled data-i18n="decisionContinue">{s.decisionContinue}</button>
+              <button class="primary editorial-approve" type="button" data-editorial-approve hidden></button>
+              <button class="primary" type="submit" disabled data-decision-submit data-i18n="decisionContinue">{s.decisionContinue}</button>
               <p class="decide-status" data-decision-status role="status"></p>
             </form>
           </div>

@@ -299,6 +299,25 @@ export async function saveConceptAssessment({ conceptId, productionSpeed, budget
   };
 }
 
+export async function publishConceptForPending({ conceptId, identity }: {
+  conceptId: string;
+  identity: Identity;
+}) {
+  if (identity.kind !== 'content_editor') throw new Error('Content editor role required.');
+  const client = getSupabaseClient();
+  if (!client) return { conceptId, publicationStatus: 'published' as const, mode: 'demo' as const };
+
+  await ensureReviewerSession(identity);
+  const { data, error } = await client.from('concepts')
+    .update({ publication_status: 'published' })
+    .eq('id', conceptId)
+    .eq('publication_status', 'draft')
+    .select('id,publication_status')
+    .single();
+  if (error) throw error;
+  return { conceptId: data.id, publicationStatus: data.publication_status as 'published', mode: 'remote' as const };
+}
+
 export async function saveConceptEditorialMetadata({ conceptId, category, productionSpeed, budgetLevel, identity }: {
   conceptId: string;
   category: ConceptCategory;
