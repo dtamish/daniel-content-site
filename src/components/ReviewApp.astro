@@ -82,7 +82,14 @@ const decisions = decisionLabels(DEFAULT_LOCALE);
     <div class="reader-document" data-document-panel>
       <div class="reader-stage" data-stage>
         <div class="reader-track" data-track>
-          <div class="reader-slide" data-page-slide><canvas data-page-canvas></canvas></div>
+          <!-- The frame exists only so the link layer can sit exactly on the painted page:
+               it is sized by the canvas, so the anchors follow every zoom, resize and turn. -->
+          <div class="reader-slide" data-page-slide>
+            <div class="reader-page" data-page-frame>
+              <canvas data-page-canvas></canvas>
+              <div class="reader-links" data-link-layer hidden></div>
+            </div>
+          </div>
           <div class="reader-slide reader-decide" data-decision-slide>
             <form class="decide" data-decision-form>
               <p class="decide-kicker" data-decision-kicker data-i18n="decisionFor">{s.decisionFor}</p>

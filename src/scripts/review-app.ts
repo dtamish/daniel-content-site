@@ -10,6 +10,7 @@ import {
   isSupabaseConfigured, loadConcepts, publishConceptForPending, saveConceptEditorialMetadata, saveReview,
   type BudgetLevel, type ConceptAssessment, type ConceptCategory, type Identity, type ProductionSpeed,
 } from '../lib/concept-repository';
+import { collectPageLinks } from '../lib/pdf-links.mjs';
 import { withBase } from '../lib/urls';
 import { installProductionDiagram } from './production-diagram.mjs';
 
@@ -68,6 +69,7 @@ if (appRoot) {
     track: need<HTMLElement>('[data-track]'),
     pageSlide: need<HTMLElement>('[data-page-slide]'),
     canvas: need<HTMLCanvasElement>('[data-page-canvas]'),
+    linkLayer: need<HTMLElement>('[data-link-layer]'),
     readerState: need<HTMLElement>('[data-reader-state]'),
     dots: need<HTMLElement>('[data-dots]'),
     prev: need<HTMLButtonElement>('[data-prev]'),
@@ -126,6 +128,10 @@ if (appRoot) {
   let renderToken = 0;
   let renderTask: pdfjs.RenderTask | null = null;
   let paintChain: Promise<unknown> = Promise.resolve();
+  // Set when a pointer gesture turned into a drag, so the anchor it started on does not
+  // also open. Read only for pointer-driven clicks, never for a keyboard activation.
+  let gestureTravelled = false;
+  let gestureOnLink = false;
 
   const create = <K extends keyof HTMLElementTagNameMap>(tag: K, className?: string, text?: string) => {
     const node = document.createElement(tag);
@@ -744,15 +750,62 @@ if (appRoot) {
     }
   }
 
+  function isLinkTarget(target: EventTarget | null) {
+    return target instanceof Element && Boolean(target.closest('[data-link-layer]'));
+  }
+
+  /**
+   * A link belongs to one page of one document. Every path that changes either — a page
+   * turn, a zoom, a resize, opening another concept, closing the reader — comes through
+   * here first, so a stale hotspot can never sit over fresh ink.
+   */
+  function clearPageLinks() {
+    el.linkLayer.replaceChildren();
+    el.linkLayer.hidden = true;
+  }
+
+  function paintPageLinks(links: ReturnType<typeof collectPageLinks>) {
+    const anchors = links.map((link) => {
+      const anchor = create('a', 'reader-link');
+      anchor.href = link.url;
+      // A reviewer's decision panel must survive reading a reference, and an opened tab
+      // must not keep a handle on the room it came from.
+      anchor.target = '_blank';
+      anchor.rel = 'noopener noreferrer';
+      anchor.title = link.url;
+      // The anchor covers ink, not text, so the address is the only name it can offer.
+      anchor.setAttribute('aria-label', strings.documentLink(link.url));
+      anchor.style.left = `${link.left}%`;
+      anchor.style.top = `${link.top}%`;
+      anchor.style.width = `${link.width}%`;
+      anchor.style.height = `${link.height}%`;
+      anchor.addEventListener('click', (event) => {
+        // `detail` is 0 for Enter on a focused link, so a keyboard reader is never
+        // blocked by whatever the last finger or mouse did on the page.
+        if (event.detail > 0 && gestureTravelled) event.preventDefault();
+      });
+      return anchor;
+    });
+    el.linkLayer.replaceChildren(...anchors);
+    el.linkLayer.hidden = anchors.length === 0;
+  }
+
   async function paint() {
     if (!pdf || view >= pageCount) return;
     const token = ++renderToken;
     cancelRender();
+    clearPageLinks();
     const page = await pdf.getPage(view + 1);
     if (token !== renderToken) return;
     const css = fitScale(page) * zoom;
     const ratio = Math.min(window.devicePixelRatio || 1, 2);
     const viewport = page.getViewport({ scale: css * ratio });
+    // Fetched alongside the render rather than before it, so links never delay the ink.
+    // The boxes are shares of the page, so this viewport only has to agree with the
+    // rendered one about rotation; its scale is irrelevant.
+    const annotations = page.getAnnotations({ intent: 'display' })
+      .then((list) => collectPageLinks(list, page.getViewport({ scale: 1 })))
+      .catch(() => []);
     // Each render gets its own canvas. cancel() does not release a canvas synchronously, so
     // sharing one makes pdf.js reject the next render as "the same canvas" whenever a zoom,
     // a page change and a resize overlap. The finished bitmap is copied across on success.
@@ -762,13 +815,17 @@ if (appRoot) {
     const task = page.render({ canvas: buffer, viewport });
     renderTask = task;
     const done = () => { if (renderTask === task) renderTask = null; };
-    task.promise.then(() => {
+    task.promise.then(async () => {
       done();
       if (token !== renderToken) return;
       el.canvas.width = buffer.width;
       el.canvas.height = buffer.height;
       el.canvas.style.width = `${buffer.width / ratio}px`;
       el.canvas.getContext('2d')?.drawImage(buffer, 0, 0);
+      // Only now: the hotspots go up over the page that is actually on screen.
+      const links = await annotations;
+      if (token !== renderToken) return;
+      paintPageLinks(links);
     }, (error: unknown) => {
       done();
       if (token !== renderToken) return;   // superseded by a newer page or zoom level
@@ -858,6 +915,7 @@ if (appRoot) {
     el.commentsForm.reset();
     el.decisionStatus.textContent = '';
     el.decisionSubmit.disabled = true;
+    clearPageLinks();   // the previous concept's links must not greet the next one
     el.reader.hidden = false;
     switchReaderView(initialView);
     document.body.classList.add('reader-open');
@@ -897,6 +955,7 @@ if (appRoot) {
     document.body.classList.remove('reader-open');
     renderToken += 1;
     void cancelRender();
+    clearPageLinks();
     // Never leave a signed document URL alive behind a closed reader.
     void loadingTask?.destroy();
     loadingTask = null;
@@ -952,12 +1011,14 @@ if (appRoot) {
   let lastX = 0;
   let lastY = 0;
 
-  function beginGesture(x: number, y: number) {
+  function beginGesture(x: number, y: number, onLink = false) {
     startX = lastX = x;
     startY = lastY = y;
     startScrollLeft = el.pageSlide.scrollLeft;
     startScrollTop = el.pageSlide.scrollTop;
     gesture = 'undecided';
+    gestureTravelled = false;
+    gestureOnLink = onLink;
   }
 
   function moveGesture(x: number, y: number, prevent: () => void) {
@@ -989,10 +1050,16 @@ if (appRoot) {
   function endGesture(timeStamp: number) {
     const dx = lastX - startX;
     const dy = lastY - startY;
+    const still = Math.abs(dx) < 8 && Math.abs(dy) < 8;
+    gestureTravelled = !still;
     if (gesture === 'swipe') {
       releaseSwipe(dx);
-    } else if (gesture === 'undecided' && Math.abs(dx) < 8 && Math.abs(dy) < 8) {
-      if (timeStamp - lastTap < 320) {
+    } else if (gesture === 'undecided' && still) {
+      // A tap on a link opens the link. It must not also be read as half a double-tap,
+      // or the page would zoom out from under the tab that is opening.
+      if (gestureOnLink) {
+        lastTap = 0;
+      } else if (timeStamp - lastTap < 320) {
         setZoom(zoom > 1.01 ? 1 : 2.6, { x: lastX, y: lastY });
         lastTap = 0;
       } else {
@@ -1041,7 +1108,7 @@ if (appRoot) {
       return;
     }
     if (event.touches.length > 2) return;
-    beginGesture(event.touches[0].clientX, event.touches[0].clientY);
+    beginGesture(event.touches[0].clientX, event.touches[0].clientY, isLinkTarget(event.target));
   }, { passive: false });
 
   el.stage.addEventListener('touchmove', (event) => {
@@ -1069,7 +1136,7 @@ if (appRoot) {
   el.stage.addEventListener('pointerdown', (event) => {
     if (event.pointerType !== 'mouse') return;
     points.set(event.pointerId, { x: event.clientX, y: event.clientY });
-    beginGesture(event.clientX, event.clientY);
+    beginGesture(event.clientX, event.clientY, isLinkTarget(event.target));
   });
 
   el.stage.addEventListener('pointermove', (event) => {
@@ -1095,7 +1162,11 @@ if (appRoot) {
   need<HTMLButtonElement>('[data-zoom-in]').addEventListener('click', () => setZoom(zoom * 1.4));
   need<HTMLButtonElement>('[data-zoom-out]').addEventListener('click', () => setZoom(zoom / 1.4));
 
-  el.stage.addEventListener('dblclick', () => setZoom(zoom > 1 ? 1 : 2.4));
+  // Double-clicking a link is still two clicks on that link, not a request to zoom.
+  el.stage.addEventListener('dblclick', (event) => {
+    if (isLinkTarget(event.target)) return;
+    setZoom(zoom > 1 ? 1 : 2.4);
+  });
 
   // ----------------------------------------------------------------- events
   el.tabs.addEventListener('click', (event) => {
