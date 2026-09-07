@@ -1,8 +1,9 @@
 import * as pdfjs from 'pdfjs-dist';
 import workerUrl from 'pdfjs-dist/build/pdf.worker.mjs?url';
 import {
-  CATEGORY_COLOURS, conceptCategory, conceptStatus, countByStatus, conceptsWithStatus,
-  decisionLabels, groupByCategory, latestReview, sortApprovedConcepts, visibleCommentReviews,
+  CATEGORY_COLOURS, canManageOwnComment, canWriteComment, conceptCategory, conceptStatus,
+  countByStatus, conceptsWithStatus, decisionLabels, groupByCategory, latestReview,
+  sortApprovedConcepts, visibleCommentReviews,
 } from '../lib/review-state.mjs';
 import { DEFAULT_LOCALE, STRINGS, direction, isLocale, type Locale, type ReviewerRole } from '../lib/i18n';
 import {
@@ -645,19 +646,23 @@ if (appRoot) {
         create('span', '', labels[review.decision] ?? strings.tabs.pending),
       );
       article.append(head, create('p', 'comment-body', review.notes));
-      // Only the author of a comment may revise or withdraw it, and only while the
-      // concept is out of Pending, exactly as the existing edit gate works. The server
-      // re-checks the author against auth.uid(); this is presentation, not the rule.
-      if (review.isOwn && status !== 'pending') {
+      // Only the author of a comment may revise or withdraw it, in any status: a comment
+      // retained through a reset back to Pending is still theirs. The server re-checks
+      // the author against auth.uid(); this is presentation, not the rule.
+      if (canManageOwnComment(review)) {
         const actions = create('div', 'comment-actions');
         const edit = create('button', 'comment-edit', strings.editComment);
         edit.type = 'button';
         edit.addEventListener('click', () => {
+          // Revising is never a decision. Any decision the reviewer had staged is
+          // dropped here, so the saved revision goes out as an ordinary appended
+          // comment and cannot move the concept's production status.
+          pendingDecision = '';
           el.commentsInput.value = review.notes ?? '';
           editingDecision = review.decision;
           editingReviewId = review.id ?? null;
+          renderComments();
           el.commentsInput.focus();
-          el.commentsSubmit.textContent = strings.saveComment;
         });
         const remove = create('button', 'comment-delete', strings.deleteComment);
         remove.type = 'button';
@@ -667,7 +672,7 @@ if (appRoot) {
       }
       el.commentsList.append(article);
     }
-    const canWrite = Boolean(pendingDecision) || status !== 'pending';
+    const canWrite = canWriteComment({ status, pendingDecision, editingReviewId });
     el.commentsSubmit.textContent = pendingDecision ? strings.saveDecision : (editingReviewId ? strings.saveComment : strings.addComment);
     el.commentsSubmit.hidden = !canWrite;
     el.commentsInput.disabled = !canWrite;

@@ -93,6 +93,34 @@ export function visibleCommentReviews(reviews = []) {
   ));
 }
 
+/**
+ * Who may revise or withdraw a comment. Authorship is the whole rule, and it is the
+ * backend's answer: `isOwn` comes from comparing the row's reviewer to the session, and
+ * a supersede needs the row's id. The concept's status is deliberately absent. A reset
+ * that keeps the notes returns the concept to Pending with the author's comment still on
+ * the thread, and a comment a reviewer can still read is a comment they can still fix or
+ * take back. The server re-checks the author against auth.uid(); this only decides what
+ * is drawn.
+ *
+ * @param {{ id?: string, isOwn?: boolean } | null | undefined} review
+ */
+export function canManageOwnComment(review) {
+  return Boolean(review?.isOwn) && Boolean(review?.id);
+}
+
+/**
+ * Whether the comment box accepts text. Pending still refuses a *new* comment until a
+ * decision is staged — that gate is unchanged. Revising a comment already on the thread
+ * opens the box for that one revision, and it closes again as soon as the revision is
+ * saved, so no standing permission to comment in Pending is created.
+ * An absent status falls back to Pending so the gate fails closed.
+ *
+ * @param {{ status?: string, pendingDecision?: string, editingReviewId?: string | null }} [gate]
+ */
+export function canWriteComment({ status = 'pending', pendingDecision = '', editingReviewId = null } = {}) {
+  return Boolean(pendingDecision) || status !== 'pending' || Boolean(editingReviewId);
+}
+
 export function conceptStatus(concept) {
   const latest = latestReview(concept?.reviews);
   return latest ? STATUS_OF_DECISION[latest.decision] ?? 'pending' : 'pending';

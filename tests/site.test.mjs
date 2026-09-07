@@ -430,7 +430,10 @@ test('comment revisions remain append-only instead of mutating review history', 
   assert.match(reviewScript, /saveReview\(\{/);
   assert.match(reviewScript, /supersedesReviewId: editingReviewId/);
   assert.match(reviewScript, /comment-edit/);
-  assert.match(reviewScript, /review\.isOwn && status !== 'pending'/);
+  assert.match(reviewScript, /canManageOwnComment\(review\)/);
+  // Authorship alone decides who gets the controls: a comment retained through a reset
+  // to Pending is still the author's, so the status must not appear in that gate.
+  assert.doesNotMatch(reviewScript, /review\.isOwn && status !== 'pending'/);
   assert.doesNotMatch(reviewScript, /review\.reviewerRole === currentIdentity\.kind/);
   assert.match(reviewScript, /pendingDecision \|\| editingDecision \|\| ownLatestReview\(\)\?\.decision/);
   assert.doesNotMatch(reviewScript, /pendingDecision \|\| latestReview\(active\.reviews\)/);
@@ -613,7 +616,7 @@ test('a reviewer may withdraw only their own comment, and the server decides tha
   const migration = readFileSync(join(root, 'supabase/migrations/202608160004_open_reviewer_access.sql'), 'utf8');
 
   // The button is offered only to the author, on the same gate the edit button uses.
-  assert.match(reviewScript, /if \(review\.isOwn && status !== 'pending'\) \{/);
+  assert.match(reviewScript, /if \(canManageOwnComment\(review\)\) \{/);
   assert.match(reviewScript, /create\('button', 'comment-delete', strings\.deleteComment\)/);
   assert.match(reviewScript, /if \(!active \|\| !identity \|\| !review\.isOwn \|\| !review\.id\) return;/);
 
@@ -740,4 +743,32 @@ test('Values Arena is kept in the series category in repeatable database setup',
   assert.match(migration, /title = 'Values Arena'/);
   assert.match(migration, /set category = 'series'/);
   assert.match(migration, /category = 'digital'/);
+});
+
+test('a comment retained into Pending stays editable without opening a new comment', () => {
+  const reviewScript = readFileSync(join(root, 'src/scripts/review-app.ts'), 'utf8');
+  const reviewState = readFileSync(join(root, 'src/lib/review-state.mjs'), 'utf8');
+
+  // Both gates come from the shared module, so the tested rule is the shipped rule.
+  assert.match(reviewScript, /canManageOwnComment,?/);
+  assert.match(reviewScript, /canWriteComment,?/);
+  assert.match(reviewState, /export function canManageOwnComment/);
+  assert.match(reviewState, /export function canWriteComment/);
+
+  // Writing is opened by a staged decision, by leaving Pending, or by revising a
+  // comment that is already on the thread -- never by Pending on its own.
+  assert.match(reviewScript, /canWriteComment\(\{ status, pendingDecision, editingReviewId \}\)/);
+  assert.match(reviewState, /Boolean\(pendingDecision\) \|\| status !== 'pending' \|\| Boolean\(editingReviewId\)/);
+
+  // Revising drops any staged decision, so a revision can never be submitted as one.
+  assert.match(reviewScript, /pendingDecision = '';\s+el\.commentsInput\.value = review\.notes/);
+  assert.match(reviewScript, /affectsDecision: wasDecision/);
+  assert.match(reviewScript, /const wasDecision = Boolean\(pendingDecision\)/);
+
+  // The lock copy tells the truth about what Pending actually withholds: a new comment.
+  const strings = readFileSync(join(root, 'src/lib/i18n.ts'), 'utf8');
+  assert.doesNotMatch(strings, /before adding or editing comments/);
+  assert.doesNotMatch(strings, /להוסיף או לערוך הערות/);
+  assert.match(strings, /Choose a new decision before adding a comment\./);
+  assert.match(strings, /כדי להוסיף הערה חדשה צריך לבחור החלטה\./);
 });

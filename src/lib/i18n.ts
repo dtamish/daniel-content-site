@@ -223,7 +223,7 @@ const en: Strings = {
   resetSaving: 'Resetting…',
   resetSaved: 'The concept is back in Pending.',
   resetFailed: 'Reset failed.',
-  commentsLocked: 'Choose a new decision before adding or editing comments.',
+  commentsLocked: 'Choose a new decision before adding a comment. You can still edit or delete your own comments.',
   approvedSortLabel: 'Sort concepts',
   approvedSorts: { default: 'Default order', speed: 'Production speed', budget: 'Budget', viability: 'Best viability' },
   assessment: {
@@ -342,7 +342,7 @@ const he: Strings = {
   resetSaving: 'מאפס…',
   resetSaved: 'הקונספט חזר לממתינים.',
   resetFailed: 'האיפוס נכשל.',
-  commentsLocked: 'כדי להוסיף או לערוך הערות צריך לבחור החלטה חדשה.',
+  commentsLocked: 'כדי להוסיף הערה חדשה צריך לבחור החלטה. אפשר עדיין לערוך או למחוק הערות משלך.',
   approvedSortLabel: 'סידור קונספטים',
   approvedSorts: { default: 'סדר רגיל', speed: 'מהירות הפקה', budget: 'תקציב', viability: 'כדאיות' },
   assessment: {

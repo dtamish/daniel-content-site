@@ -2,7 +2,10 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   DECISIONS,
+  canManageOwnComment,
+  canWriteComment,
   conceptStatus,
+  countByStatus,
   createReview,
   filterConceptsByLatestDecision,
   getReviewerBadges,
@@ -199,4 +202,83 @@ test('viability prioritizes the combined fastest and cheapest estimates', () => 
 test('accepts descriptions up to 500 characters and rejects longer text', () => {
   assert.equal(validateConceptDescription('א'.repeat(500)), true);
   assert.equal(validateConceptDescription('א'.repeat(501)), false);
+});
+
+// --------------------------------------------- own comments after a reset to Pending
+// A reset that keeps the notes returns the concept to Pending while the author's own
+// comment stays on the thread. The author must keep the controls on that retained
+// comment: it is still theirs and still visible. Concept status is not a factor.
+
+const retainedAfterReset = [
+  { id: 'decision', reviewerId: 'management', decision: 'schedule-approved', notes: 'approving this', affectsDecision: true, createdAt: '2026-09-01T10:00:00Z' },
+  { id: 'mine', reviewerId: 'advisor', isOwn: true, decision: 'schedule-approved', notes: 'my note on the runtime', affectsDecision: false, createdAt: '2026-09-01T11:00:00Z' },
+  { id: 'reset', reviewerId: 'management', decision: 'reset', notes: '', affectsDecision: true, clearPriorNotes: false, createdAt: '2026-09-01T12:00:00Z' },
+];
+
+test('a reset that keeps notes returns the concept to Pending with the comments retained', () => {
+  assert.equal(conceptStatus({ reviews: retainedAfterReset }), 'pending');
+  assert.deepEqual(visibleCommentReviews(retainedAfterReset).map(({ id }) => id), ['decision', 'mine']);
+});
+
+test('the author keeps edit and withdraw on a comment retained into Pending', () => {
+  const [, mine] = retainedAfterReset;
+  assert.equal(conceptStatus({ reviews: retainedAfterReset }), 'pending');
+  assert.equal(canManageOwnComment(mine), true);
+});
+
+test('a comment by another author is never manageable, in any status', () => {
+  const [theirs] = retainedAfterReset;
+  for (const reviews of [retainedAfterReset, retainedAfterReset.slice(0, 2)]) {
+    assert.equal(canManageOwnComment(theirs), false, conceptStatus({ reviews }));
+  }
+  assert.equal(canManageOwnComment({ id: 'x', isOwn: false }), false);
+  // isOwn is the backend's answer about authorship; a row with no id cannot be superseded.
+  assert.equal(canManageOwnComment({ isOwn: true }), false);
+  assert.equal(canManageOwnComment(null), false);
+});
+
+test('revising a retained comment opens the box without granting a new comment in Pending', () => {
+  // No decision staged and nothing being revised: Pending still refuses a new comment.
+  assert.equal(canWriteComment({ status: 'pending' }), false);
+  // Revising the author's own retained comment opens the box for that revision alone.
+  assert.equal(canWriteComment({ status: 'pending', editingReviewId: 'mine' }), true);
+  // Once the revision is saved the box closes again: no standing new-comment permission.
+  assert.equal(canWriteComment({ status: 'pending', editingReviewId: null }), false);
+  // The existing gates are unchanged: a staged decision opens it, and so does any
+  // concept that has left Pending.
+  assert.equal(canWriteComment({ status: 'pending', pendingDecision: 'canceled' }), true);
+  assert.equal(canWriteComment({ status: 'approved' }), true);
+  assert.equal(canWriteComment({ status: 'rejected' }), true);
+  // The gate fails closed: an unrecognised or absent status is treated as Pending.
+  assert.equal(canWriteComment(), false);
+  assert.equal(canWriteComment({}), false);
+});
+
+test('a revision of a comment retained into Pending leaves the concept in Pending', () => {
+  const revised = [
+    ...retainedAfterReset,
+    { id: 'revision', reviewerId: 'advisor', isOwn: true, supersedesReviewId: 'mine', decision: 'schedule-approved', notes: 'my revised note', affectsDecision: false, createdAt: '2026-09-01T13:00:00Z' },
+  ];
+
+  // The revision repeats the decision its comment was attached to, but carries no
+  // decision weight, so the concept does not leave Pending and the tab counts hold.
+  assert.equal(conceptStatus({ reviews: revised }), 'pending');
+  assert.deepEqual(countByStatus([{ reviews: revised }]), { pending: 1, approved: 0, rejected: 0 });
+  assert.deepEqual(visibleCommentReviews(revised).map(({ id }) => id), ['decision', 'revision']);
+  // Nothing was removed: the superseded row is still on record.
+  assert.equal(revised.length, 4);
+  assert.equal(revised[1].notes, 'my note on the runtime');
+});
+
+test('withdrawing a comment retained into Pending leaves the concept in Pending', () => {
+  const withdrawn = [
+    ...retainedAfterReset,
+    { id: 'tombstone', reviewerId: 'advisor', isOwn: true, supersedesReviewId: 'mine', decision: 'schedule-approved', notes: '', affectsDecision: false, createdAt: '2026-09-01T13:00:00Z' },
+  ];
+
+  assert.equal(conceptStatus({ reviews: withdrawn }), 'pending');
+  assert.deepEqual(countByStatus([{ reviews: withdrawn }]), { pending: 1, approved: 0, rejected: 0 });
+  // The author's comment leaves the thread; the other author's comment survives.
+  assert.deepEqual(visibleCommentReviews(withdrawn).map(({ id }) => id), ['decision']);
+  assert.equal(withdrawn.length, 4);
 });
