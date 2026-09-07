@@ -27,6 +27,7 @@ SINAI Concept Room is a fast review surface for concept documents. Its job is to
 - Preserve source banner composition. Use only verified, private derivatives if optimizing weight.
 - The reader is a full-screen dark surface that renders the document **page by page with PDF.js onto a canvas**: pinch and wheel zoom, drag to pan when zoomed, horizontal swipe or the ‹ › buttons to change page, arrow keys and Escape. It is not an embedded browser viewer, and there is no `iframe`.
 - The document ends on the decision: after the last page the pager shows the decision panel. That is where a review is saved.
+- A link written inside a document is clickable. Because the page is canvas, real anchors are laid over the ink in `[data-link-layer]`, sized in per cent of the page so they follow every zoom, resize and rotation. The rules live in `src/lib/pdf-links.mjs`: only plain `http`/`https`, used exactly as the document spells it, opened in a new tab with `rel="noopener noreferrer"`. The layer takes no pointer events, so it must never capture a swipe, pan or pinch; links are cleared before every repaint so a hotspot cannot outlive its page. Do not replace this with pdf.js's own `AnnotationLayer` without re-proving the gesture, sanitisation and clearing behaviour.
 - Closing the reader must destroy the PDF.js loading task and clear the canvas, so a signed URL is not left live in the page.
 - The four permitted decision values are the source of truth in `src/lib/review-state.mjs`:
   1. `priority-approved` — `מאושר להפקה ולקדם במיידי`
