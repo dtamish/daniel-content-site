@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 const markup = readFileSync(new URL('../src/components/ReviewApp.astro', import.meta.url), 'utf8');
-const room = readFileSync(new URL('../src/styles/room.css', import.meta.url), 'utf8');
+const room = readFileSync(new URL('../src/styles/room.css', import.meta.url), 'utf8').replace(/\r\n/g, '\n');
 const global = readFileSync(new URL('../src/styles/global.css', import.meta.url), 'utf8');
 const diagram = readFileSync(new URL('../src/styles/production-diagram.css', import.meta.url), 'utf8');
 const app = readFileSync(new URL('../src/scripts/review-app.ts', import.meta.url), 'utf8');
