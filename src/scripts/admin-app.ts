@@ -1,8 +1,8 @@
 import type { Session } from '@supabase/supabase-js';
 import { getSupabaseClient, isSupabaseConfigured } from '../lib/supabase-client';
 import {
-  ARTWORK_BANNER_FILE, BANNER_ARTWORK, CHECK_VIOLATION, artworkBannerPathFor, assertBannerSource,
-  bannerLayoutFromPath, composeBannerArtwork, constrainedBannerPathFor,
+  BANNER_ARTWORK, CHECK_VIOLATION, assertBannerSource, bannerLayoutFromPath,
+  composeBannerArtwork, constrainedBannerPathFor, versionedArtworkBannerPath,
 } from '../lib/banner-artwork.mjs';
 
 const app = document.querySelector<HTMLElement>('[data-admin-app]');
@@ -339,17 +339,20 @@ if (app) {
   // ------------------------------------------------------------ banner studio
   //
   // The catalogue's banners were cut from each concept document's hero band, so every one
-  // of them has its title baked into the picture, and the card had to print that title a
+  // of them has its title painted into the picture, and the card had to print that title a
   // second time underneath. Regenerating a banner is what removes the duplicate, and until
   // now that could only be done by an operator running a local script against the service
   // key. This panel is the same operation for an approved editor, in the browser, under
-  // their own session: the storage and table policies that already exist are what allow
-  // it, and nothing here asks for a permission the editor did not already have.
+  // their own session: the storage and table policies that already exist are what allow it,
+  // and nothing here asks for a permission the editor did not already have.
   //
-  // Composition happens on a canvas in this tab. A preview is never uploaded. Saving
-  // writes the new picture to a *new* object beside the original and then points the
-  // concept at it, so the original banner is still in the bucket and restoring it is one
-  // row update away.
+  // Three rules hold the panel together:
+  //  - a preview is composed on a canvas in this tab and reaches nothing;
+  //  - every save writes a new, immutable object in its own folder, so no banner ever
+  //    published — delivered or regenerated — is overwritten, and the pointer it replaced
+  //    is recorded so it can be put back;
+  //  - correcting a title on a banner that is already title-free changes the title only,
+  //    and never re-encodes the picture.
   const studio = required<HTMLElement>('[data-banner-studio]');
   const bannerForm = required<HTMLFormElement>('[data-banner-form]');
   const bannerConceptSelect = required<HTMLSelectElement>('[data-banner-concept]');
@@ -369,20 +372,45 @@ if (app) {
     banner_path: string | null;
     publication_status: string;
   };
+  /** What Save would do next: nothing, retitle in place, or publish a composed banner. */
+  type PendingSave =
+    | null
+    | { kind: 'title' }
+    | { kind: 'banner'; conceptId: string; blob: Blob; url: string };
+
+  const PREVIOUS_BANNERS_KEY = 'concept-banner-studio:replaced';
 
   let bannerConcepts: BannerConcept[] = [];
-  /** The banner each concept pointed at before it was regenerated in this session. */
-  const previousBannerPaths = new Map<string, string | null>();
-  let composedBanner: { blob: Blob; url: string } | null = null;
+  let pendingSave: PendingSave = null;
   let currentBannerUrl = '';
   let wordmark: HTMLImageElement | null = null;
+  /** Bumped whenever the concept or the chosen background changes, so a decode that is
+   *  still running cannot land its result on a different concept. */
+  let previewToken = 0;
 
   const selectedBannerConcept = () =>
     bannerConcepts.find((concept) => concept.id === bannerConceptSelect.value) ?? null;
 
-  function releaseComposedBanner() {
-    if (composedBanner) URL.revokeObjectURL(composedBanner.url);
-    composedBanner = null;
+  /** The pointer each concept had before this browser replaced it, kept for Restore. */
+  function replacedBanners(): Record<string, string> {
+    try {
+      return JSON.parse(localStorage.getItem(PREVIOUS_BANNERS_KEY) ?? '{}');
+    } catch {
+      return {};
+    }
+  }
+
+  function rememberReplacedBanner(conceptId: string, path: string | null) {
+    if (!path) return;
+    const record = replacedBanners();
+    // Only the first replacement matters: that is the banner the catalogue was delivered with.
+    record[conceptId] ??= path;
+    localStorage.setItem(PREVIOUS_BANNERS_KEY, JSON.stringify(record));
+  }
+
+  function clearPending() {
+    if (pendingSave?.kind === 'banner') URL.revokeObjectURL(pendingSave.url);
+    pendingSave = null;
     bannerSaveButton.disabled = true;
   }
 
@@ -443,7 +471,8 @@ if (app) {
   }
 
   async function showCurrentBanner() {
-    releaseComposedBanner();
+    previewToken += 1;
+    clearPending();
     const concept = selectedBannerConcept();
     bannerSourceInput.value = '';
     currentBannerUrl = '';
@@ -462,46 +491,50 @@ if (app) {
     bannerCurrent.textContent = layout === 'artwork'
       ? `הבאנר הנוכחי נקי מטקסט, והכותרת מצוירת עליו כטקסט חי · ${concept.banner_path}`
       : `הבאנר הנוכחי מכיל כותרת צרובה בתוך התמונה · ${concept.banner_path ?? 'אין באנר'}`;
-    bannerRestoreButton.hidden = layout !== 'artwork';
+    bannerRestoreButton.hidden = !replacedBanners()[concept.id];
     if (!client || !concept.banner_path) {
       bannerPreview.replaceChildren();
       return;
     }
+    const token = previewToken;
     const { data } = await client.storage.from('concept-banners').createSignedUrl(concept.banner_path, 60 * 10);
+    if (token !== previewToken) return;
     currentBannerUrl = data?.signedUrl ?? '';
     if (currentBannerUrl) renderBannerPreview(currentBannerUrl, layout, bannerTitleInput.value);
   }
 
   /**
-   * Composes the preview. The background is the file the editor picked, or — when the
-   * concept already has a title-free banner — that banner itself, so a title can be
-   * corrected without hunting for the artwork again. A banner that still has its title
-   * baked in is never reused as a background: that would paint a second title over the
-   * first, which is the very defect this panel exists to remove.
+   * Composes the preview from the background the editor chose. A banner that still has its
+   * title baked in is never reused as a background: that would paint a second title over
+   * the first, which is the very defect this panel exists to remove. A banner that is
+   * already title-free needs no new background at all — correcting its title is a title
+   * change, handled without touching a single pixel.
    */
   async function previewBanner() {
     const concept = selectedBannerConcept();
     if (!concept) throw new Error('יש לבחור קונספט.');
     const chosen = bannerSourceInput.files?.[0] ?? null;
-    let source: Blob;
-    if (chosen?.size) {
-      source = assertBannerSource(chosen) as Blob;
-    } else if (bannerLayoutFromPath(concept.banner_path) === 'artwork' && currentBannerUrl) {
-      source = await (await fetch(currentBannerUrl)).blob();
-    } else {
-      throw new Error('יש לבחור תמונת רקע נקייה מטקסט. אי אפשר להרכיב באנר מעל באנר שהכותרת כבר צרובה בתוכו.');
+    if (!chosen?.size) {
+      throw new Error(bannerLayoutFromPath(concept.banner_path) === 'artwork'
+        ? 'הבאנר כבר נקי מטקסט. לשינוי הכותרת בלבד די לערוך את שדה הכותרת ולשמור — התמונה לא תיגע.'
+        : 'יש לבחור תמונת רקע נקייה מטקסט. אי אפשר להרכיב באנר מעל באנר שהכותרת כבר צרובה בתוכו.');
     }
-    const bitmap = await createImageBitmap(source);
+    const token = previewToken;
+    const bitmap = await createImageBitmap(assertBannerSource(chosen) as Blob);
     try {
       const blob = await composeBannerArtwork({
         source: bitmap,
         wordmark: await brandWordmark(),
         direction: concept.locale === 'he' ? 'rtl' : 'ltr',
       });
-      releaseComposedBanner();
-      composedBanner = { blob, url: URL.createObjectURL(blob) };
+      // The editor may have moved on while the picture was decoding.
+      if (token !== previewToken || selectedBannerConcept()?.id !== concept.id) {
+        throw new Error('הבחירה השתנתה בזמן ההרכבה. אפשר לנסות שוב.');
+      }
+      clearPending();
+      pendingSave = { kind: 'banner', conceptId: concept.id, blob, url: URL.createObjectURL(blob) };
       bannerSaveButton.disabled = false;
-      renderBannerPreview(composedBanner.url, 'artwork', bannerTitleInput.value.trim() || concept.title);
+      renderBannerPreview(pendingSave.url, 'artwork', bannerTitleInput.value.trim() || concept.title);
       return blob;
     } finally {
       bitmap.close?.();
@@ -509,31 +542,64 @@ if (app) {
   }
 
   /**
-   * Publishes a composed banner without ever writing over the delivered one.
+   * Publishes a composed banner as a new object in a folder of its own.
    *
-   * The preferred object sits beside the original and is named so the room recognises it as
-   * title-free. A catalogue that has not yet run 202609070003_banner_artwork_path.sql still
-   * refuses that name at the database, so the banner goes to its own folder instead: the
-   * duplicate title is gone either way, and only the live title overlay waits for the
-   * migration. Both routes leave the original object exactly where it was.
+   * Nothing already in the bucket is written over — not the delivered banner, not a banner
+   * this panel published a minute ago — so every version stays recoverable and the pointer
+   * being replaced is recorded before it changes. The concept row is updated only if it
+   * still points where it did when the preview was made, so two editors cannot silently
+   * overwrite each other.
+   *
+   * A catalogue that has not yet run 202609070003_banner_artwork_path.sql refuses the
+   * banner-artwork.png name at the database, so the same bytes are published under the name
+   * that constraint does allow. The duplicate title is gone either way; only the room's live
+   * title overlay waits for the migration.
    */
   async function publishArtworkBanner(concept: BannerConcept, blob: Blob, title: string) {
     if (!client) throw new Error('Supabase אינו מחובר.');
-    const attempt = async (path: string) => {
-      const upload = await client.storage.from('concept-banners')
-        .upload(path, blob, { contentType: BANNER_ARTWORK.outputType, upsert: true });
-      if (upload.error) throw upload.error;
-      return client.from('concepts').update({ banner_path: path, title })
-        .eq('id', concept.id).select('id,title,banner_path').single();
+    const version = crypto.randomUUID();
+    const upload = async (path: string) => {
+      const result = await client.storage.from('concept-banners')
+        .upload(path, blob, { contentType: BANNER_ARTWORK.outputType, upsert: false });
+      if (result.error) throw result.error;
+      return path;
     };
-    const artworkPath = artworkBannerPathFor(concept.banner_path, concept.id);
-    let { data, error } = await attempt(artworkPath);
+    const point = (path: string) => client.from('concepts')
+      .update({ banner_path: path, title })
+      .eq('id', concept.id)
+      .eq('banner_path', concept.banner_path)
+      .select('id,title,banner_path')
+      .maybeSingle();
+
+    let path = await upload(versionedArtworkBannerPath(version));
+    let { data, error } = await point(path);
     if (error?.code === CHECK_VIOLATION) {
-      ({ data, error } = await attempt(constrainedBannerPathFor(crypto.randomUUID())));
+      await client.storage.from('concept-banners').remove([path]);
+      path = await upload(constrainedBannerPathFor(version));
+      ({ data, error } = await point(path));
     }
     if (error) throw error;
-    if (!data) throw new Error('השמירה לא החזירה את השורה המעודכנת.');
+    if (!data) {
+      // The concept moved under us; the object just uploaded is ours alone to clean up.
+      await client.storage.from('concept-banners').remove([path]);
+      throw new Error('הבאנר של הקונספט השתנה בינתיים. יש לרענן ולנסות שוב.');
+    }
+    rememberReplacedBanner(concept.id, concept.banner_path);
     return { ...data, liveTitle: bannerLayoutFromPath(data.banner_path) === 'artwork' };
+  }
+
+  /** A title correction on a banner that is already title-free: the picture is not touched. */
+  async function saveTitleOnly(concept: BannerConcept, title: string) {
+    if (!client) throw new Error('Supabase אינו מחובר.');
+    const { data, error } = await client.from('concepts')
+      .update({ title })
+      .eq('id', concept.id)
+      .eq('title', concept.title)
+      .select('id,title,banner_path')
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) throw new Error('הכותרת השתנתה בינתיים. יש לרענן ולנסות שוב.');
+    return data;
   }
 
   bannerConceptSelect.addEventListener('change', () => {
@@ -546,9 +612,16 @@ if (app) {
   bannerTitleInput.addEventListener('input', () => {
     const heading = bannerPreview.querySelector('.card-title');
     if (heading) heading.textContent = bannerTitleInput.value;
+    const concept = selectedBannerConcept();
+    if (!concept || pendingSave?.kind === 'banner') return;
+    const changed = bannerTitleInput.value.trim() && bannerTitleInput.value.trim() !== concept.title;
+    pendingSave = changed ? { kind: 'title' } : null;
+    bannerSaveButton.disabled = !changed;
   });
 
   bannerSourceInput.addEventListener('change', () => {
+    previewToken += 1;
+    clearPending();
     bannerStatus.textContent = bannerSourceInput.files?.length
       ? 'התמונה נבחרה. אפשר ליצור תצוגה מקדימה.'
       : '';
@@ -570,8 +643,13 @@ if (app) {
     event.preventDefault();
     if (!client) return;
     const concept = selectedBannerConcept();
-    if (!concept || !composedBanner) {
-      bannerStatus.textContent = 'צריך תצוגה מקדימה לפני שמירה.';
+    const pending = pendingSave;
+    if (!concept || !pending) {
+      bannerStatus.textContent = 'אין מה לשמור: צריך כותרת חדשה או תצוגה מקדימה של באנר.';
+      return;
+    }
+    if (pending.kind === 'banner' && pending.conceptId !== concept.id) {
+      bannerStatus.textContent = 'התצוגה המקדימה שייכת לקונספט אחר. יש להרכיב אותה מחדש.';
       return;
     }
     const title = bannerTitleInput.value.trim();
@@ -579,45 +657,54 @@ if (app) {
       bannerStatus.textContent = 'כותרת היא שדה חובה.';
       return;
     }
-    if (composedBanner.blob.size > 5 * 1024 * 1024) {
+    if (pending.kind === 'banner' && pending.blob.size > 5 * 1024 * 1024) {
       bannerStatus.textContent = 'הבאנר המורכב גדול מ־5MB, מעל מה שהדלי מקבל. יש לבחור תמונת רקע קלה יותר.';
       return;
     }
     bannerSaveButton.disabled = true;
+    bannerPreviewButton.disabled = true;
+    bannerConceptSelect.disabled = true;
     bannerStatus.textContent = 'שומר…';
     const previousPath = concept.banner_path;
     try {
-      const saved = await publishArtworkBanner(concept, composedBanner.blob, title);
-      previousBannerPaths.set(concept.id, previousPath);
-      concept.banner_path = saved.banner_path;
-      concept.title = saved.title;
-      bannerStatus.textContent = saved.liveTitle
-        ? `נשמר ופורסם. הקונספט מצביע על ${saved.banner_path}, הכותרת מצוירת על הבאנר בחדר, והבאנר המקורי (${previousPath}) נשאר בארכיון.`
-        : `נשמר ופורסם ב־${saved.banner_path}, והבאנר המקורי (${previousPath}) נשאר בארכיון. עד שתופעל מיגרציית banner-artwork בבסיס הנתונים, החדר יציג את הכותרת מתחת לתמונה ולא עליה — הכפילות כבר לא קיימת בכל מקרה.`;
+      if (pending.kind === 'title') {
+        const saved = await saveTitleOnly(concept, title);
+        concept.title = saved.title;
+        bannerStatus.textContent = `הכותרת נשמרה. התמונה לא נגעה — ${saved.banner_path} נשאר בדיוק כפי שהיה.`;
+      } else {
+        const saved = await publishArtworkBanner(concept, pending.blob, title);
+        concept.banner_path = saved.banner_path;
+        concept.title = saved.title;
+        bannerStatus.textContent = saved.liveTitle
+          ? `נשמר ופורסם. הקונספט מצביע על ${saved.banner_path}, הכותרת מצוירת על הבאנר בחדר, והבאנר הקודם (${previousPath}) נשאר בארכיון.`
+          : `נשמר ופורסם ב־${saved.banner_path}, והבאנר הקודם (${previousPath}) נשאר בארכיון. עד שתופעל מיגרציית banner-artwork בבסיס הנתונים, החדר יציג את הכותרת מתחת לתמונה ולא עליה — הכפילות כבר לא קיימת בכל מקרה.`;
+      }
+      clearPending();
       await loadBannerConcepts();
       await loadConceptList();
     } catch (error) {
       bannerStatus.textContent = `השמירה נכשלה: ${error instanceof Error ? error.message : 'שגיאה לא ידועה.'}`;
       bannerSaveButton.disabled = false;
+    } finally {
+      bannerPreviewButton.disabled = false;
+      bannerConceptSelect.disabled = false;
     }
   });
 
   bannerRestoreButton.addEventListener('click', async () => {
     if (!client) return;
     const concept = selectedBannerConcept();
-    if (!concept?.banner_path) return;
+    if (!concept) return;
+    // Only the pointer this browser recorded is offered. Guessing at a neighbouring object
+    // could hand a concept a banner that was never its own.
+    const original = replacedBanners()[concept.id];
+    if (!original) {
+      bannerStatus.textContent = 'אין כאן רישום של באנר קודם. הנתיב רשום בקבלת ההרצה, ואפשר להחזיר אותו משם.';
+      return;
+    }
     bannerRestoreButton.disabled = true;
-    bannerStatus.textContent = 'מחפש את הבאנר המקורי…';
+    bannerStatus.textContent = 'מחזיר את הבאנר הקודם…';
     try {
-      const folder = concept.banner_path.slice(0, concept.banner_path.lastIndexOf('/'));
-      const { data: objects, error: listError } = await client.storage.from('concept-banners').list(folder);
-      if (listError) throw listError;
-      const sibling = (objects ?? []).find((object) => object.name !== ARTWORK_BANNER_FILE);
-      const original = previousBannerPaths.get(concept.id) ?? (sibling ? `${folder}/${sibling.name}` : null);
-      if (!original) {
-        bannerStatus.textContent = 'הבאנר המקורי אינו בתיקייה הזו. הנתיב שלו רשום בקבלת ההרצה, ואפשר להחזיר אותו משם.';
-        return;
-      }
       const { data, error } = await client.from('concepts')
         .update({ banner_path: original })
         .eq('id', concept.id)
@@ -625,7 +712,7 @@ if (app) {
         .single();
       if (error) throw error;
       concept.banner_path = data.banner_path;
-      bannerStatus.textContent = `הוחזר הבאנר המקורי: ${data.banner_path}`;
+      bannerStatus.textContent = `הוחזר הבאנר הקודם: ${data.banner_path}`;
       await loadBannerConcepts();
     } catch (error) {
       bannerStatus.textContent = `החזרה נכשלה: ${error instanceof Error ? error.message : 'שגיאה לא ידועה.'}`;

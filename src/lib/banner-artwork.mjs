@@ -55,17 +55,22 @@ export function bannerLayoutFromPath(path) {
   return isArtworkBannerPath(path) ? 'artwork' : 'composed';
 }
 
+function assertVersionFolder(folderId) {
+  const folder = String(folderId ?? '').trim();
+  if (!/^[0-9a-f-]{36}$/.test(folder)) throw new Error('A banner folder must be a 36-character id.');
+  return folder;
+}
+
 /**
- * Where a concept's regenerated banner belongs: beside its current banner, so the original
- * object is neither moved nor overwritten and the storage policy that publishes exactly
- * `concepts.banner_path` keeps working unchanged.
+ * Where one regenerated banner goes: a folder of its own, named for that version.
+ *
+ * Publishing never writes over an object already in the bucket — not the delivered banner,
+ * not a banner published from this panel a minute ago. Each save is a new immutable object
+ * and the concept's pointer is what moves, so every earlier version is still there to go
+ * back to and the storage policy that publishes exactly `concepts.banner_path` is unchanged.
  */
-export function artworkBannerPathFor(bannerPath, conceptId) {
-  const folder = typeof bannerPath === 'string' && bannerPath.includes('/')
-    ? bannerPath.slice(0, bannerPath.lastIndexOf('/'))
-    : String(conceptId ?? '').trim();
-  if (!folder) throw new Error('A banner needs either an existing path or a concept id.');
-  return `${folder}/${ARTWORK_BANNER_FILE}`;
+export function versionedArtworkBannerPath(folderId) {
+  return `${assertVersionFolder(folderId)}/${ARTWORK_BANNER_FILE}`;
 }
 
 /** Postgres check-constraint violation, as PostgREST reports it. */
@@ -86,9 +91,7 @@ export const CHECK_VIOLATION = '23514';
  * either way, because the picture no longer carries one.
  */
 export function constrainedBannerPathFor(folderId) {
-  const folder = String(folderId ?? '').trim();
-  if (!/^[0-9a-f-]{36}$/.test(folder)) throw new Error('A banner folder must be a 36-character id.');
-  return `${folder}/banner.png`;
+  return `${assertVersionFolder(folderId)}/banner.png`;
 }
 
 /**

@@ -746,6 +746,10 @@ html[lang="en"] .room :is(.card-summary,.card-status){font-weight:500;font-size:
   text-align: start;
   cursor: pointer;
   overflow-wrap: anywhere;
+  /* The title is live text, so it has to be selectable and findable. A browser makes the
+     contents of a button unselectable by default, and this is a title first. */
+  user-select: text;
+  -webkit-user-select: text;
 }
 .room .card-banner[data-banner-layout="artwork"] { display: block; background: #061845; }
 .room .card-banner[data-banner-layout="artwork"] > .card-title {

@@ -2,8 +2,8 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import {
-  ARTWORK_BANNER_FILE, BANNER_ARTWORK, artworkBannerPathFor, assertBannerSource,
-  bannerLayoutFromPath, constrainedBannerPathFor, coverBox, isArtworkBannerPath,
+  ARTWORK_BANNER_FILE, BANNER_ARTWORK, assertBannerSource, bannerLayoutFromPath,
+  constrainedBannerPathFor, coverBox, isArtworkBannerPath, versionedArtworkBannerPath,
 } from '../src/lib/banner-artwork.mjs';
 
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
@@ -27,14 +27,13 @@ test('a banner declares its own layout through its object name', () => {
   assert.equal(isArtworkBannerPath('banner-artwork.png/other.png'), false);
 });
 
-test('a regenerated banner is written beside the delivered one, never over it', () => {
-  const original = 'd198dd88-fb7a-5f0a-9d05-867919145a31/banner.png';
-  const artwork = artworkBannerPathFor(original, 'a-different-concept-id');
-  assert.equal(artwork, `d198dd88-fb7a-5f0a-9d05-867919145a31/${ARTWORK_BANNER_FILE}`);
-  assert.notEqual(artwork, original);
-  // A concept that has no banner yet still gets a path, from its own id.
-  assert.equal(artworkBannerPathFor(null, 'abc'), `abc/${ARTWORK_BANNER_FILE}`);
-  assert.throws(() => artworkBannerPathFor(null, ''), /existing path or a concept id/);
+test('every published banner is a new object, so no earlier version is written over', () => {
+  const version = 'ea00b3b6-46b6-4988-ab38-784d99458004';
+  assert.equal(versionedArtworkBannerPath(version), `${version}/${ARTWORK_BANNER_FILE}`);
+  assert.notEqual(versionedArtworkBannerPath(version), 'd198dd88-fb7a-5f0a-9d05-867919145a31/banner.png');
+  assert.equal(bannerLayoutFromPath(versionedArtworkBannerPath(version)), 'artwork');
+  assert.throws(() => versionedArtworkBannerPath('abc'), /36-character id/);
+  assert.throws(() => versionedArtworkBannerPath(null), /36-character id/);
 });
 
 test('the pre-migration fallback still satisfies the hosted banner_path constraint', () => {
@@ -101,6 +100,8 @@ test('the card opens from one control that a keyboard and a screen reader can re
   assert.match(cards, /closest\('button, a, summary, input, select, textarea, label'\)/);
   assert.match(cards, /openTitle\.addEventListener\('click', \(\) => openReader\(concept\)\)/);
   assert.match(room, /\.room \.card-open-title \{[^}]*text-align: start;/s);
+  // A title is text first: a browser makes button contents unselectable by default.
+  assert.match(room, /\.room \.card-open-title \{[^}]*user-select: text;/s);
   assert.match(room, /\.room \.card-open \{ cursor: pointer; \}/);
 });
 
@@ -151,20 +152,47 @@ test('the banner studio is inside the approved-editor workspace and holds no sec
 });
 
 test('a preview is never published, and a painted banner is never reused as a background', () => {
-  assert.match(admin, /bannerSaveButton\.disabled = true;/);
-  assert.match(admin, /releaseComposedBanner\(\);\s*\n\s*composedBanner = \{ blob, url: URL\.createObjectURL\(blob\) \};/);
-  assert.match(admin, /if \(!concept \|\| !composedBanner\) \{/);
+  assert.match(studio, /clearPending\(\);\s*\n\s*pendingSave = \{ kind: 'banner', conceptId: concept\.id, blob, url: URL\.createObjectURL\(blob\) \};/);
+  assert.match(studio, /if \(!concept \|\| !pending\) \{/);
   assert.match(admin, /אי אפשר להרכיב באנר מעל באנר שהכותרת כבר צרובה בתוכו/);
-  // Only the submit handler uploads, and it uploads exactly one object.
-  assert.equal(admin.match(/storage\.from\('concept-banners'\)\s*\n?\s*\.upload\(/g).length, 2,
-    'one upload for a new concept, one for a regenerated banner');
+  // The studio uploads in exactly one place, and only from the publish helper.
+  assert.equal(studio.match(/storage\.from\('concept-banners'\)\s*\n?\s*\.upload\(/g).length, 1);
 });
 
-test('publishing a banner keeps the original recoverable', () => {
-  assert.match(admin, /previousBannerPaths\.set\(concept\.id, previousPath\)/);
-  assert.match(admin, /const original = previousBannerPaths\.get\(concept\.id\) \?\? \(sibling \? `\$\{folder\}\/\$\{sibling\.name\}` : null\)/);
-  assert.match(studio, /upsert: true/);
-  assert.doesNotMatch(studio, /\.remove\(/, 'the studio never deletes a stored banner');
+test('a title correction never re-encodes the picture', () => {
+  const titleOnly = studio.slice(studio.indexOf('async function saveTitleOnly'),
+    studio.indexOf("bannerConceptSelect.addEventListener('change'"));
+  assert.match(titleOnly, /\.update\(\{ title \}\)/);
+  // It reads the path back to report it, but never writes one, uploads, or recomposes.
+  assert.doesNotMatch(titleOnly, /banner_path:|\.upload\(|compose/);
+  assert.match(studio, /pendingSave = changed \? \{ kind: 'title' \} : null;/);
+  // Asking to preview a banner that is already title-free says so instead of recomposing.
+  assert.match(studio, /הבאנר כבר נקי מטקסט/);
+});
+
+test('a slow decode cannot land on the concept the editor moved to', () => {
+  assert.match(studio, /let previewToken = 0;/);
+  assert.match(studio, /previewToken \+= 1;/);
+  assert.match(studio, /if \(token !== previewToken \|\| selectedBannerConcept\(\)\?\.id !== concept\.id\)/);
+  assert.match(studio, /if \(pending\.kind === 'banner' && pending\.conceptId !== concept\.id\)/);
+  // The concept cannot be switched while a save is in flight.
+  assert.match(studio, /bannerConceptSelect\.disabled = true;/);
+});
+
+test('publishing a banner keeps every earlier version recoverable', () => {
+  // Immutable: a new folder per save, and an upload that refuses to overwrite.
+  assert.match(studio, /const version = crypto\.randomUUID\(\);/);
+  assert.match(studio, /upsert: false/);
+  assert.doesNotMatch(studio, /upsert: true/);
+  // The pointer being replaced is recorded before it moves, and only that is offered back.
+  assert.match(studio, /rememberReplacedBanner\(concept\.id, concept\.banner_path\)/);
+  assert.match(studio, /record\[conceptId\] \?\?= path;/);
+  assert.match(studio, /const original = replacedBanners\(\)\[concept\.id\];/);
+  // Two editors cannot silently overwrite each other.
+  assert.match(studio, /\.eq\('banner_path', concept\.banner_path\)/);
+  assert.match(studio, /\.eq\('title', concept\.title\)/);
+  // The only object it ever deletes is one it just uploaded and could not point at.
+  assert.equal(studio.match(/\.remove\(\[path\]\)/g).length, 2);
 });
 
 test('a category is named once per card, by its group heading or by the card', () => {
