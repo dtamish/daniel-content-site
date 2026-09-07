@@ -186,6 +186,11 @@
   .assessment-chip.is-slow, .assessment-chip.is-high { border-color: #884c4c; background: #2b1818; }
   .assessment-chip.is-unassessed { border-color: #4d535b; background: #191d22; }
   .assessment-chip.is-unassessed .assessment-value { color: #8f969f; }
+  /* The band's money or calendar range. A <bdi> so a Hebrew card cannot reorder the digits. */
+  .assessment-range { display: block; overflow: hidden; color: #c2c9d1; font-size: 0.72rem; font-variant-numeric: tabular-nums; line-height: 1.2; text-overflow: ellipsis; white-space: nowrap; }
+  .assessment-note { margin: 0; color: var(--muted); font-size: 0.72rem; line-height: 1.35; }
+  .assessment-editor .assessment-note { grid-column: 1 / -1; margin-block-start: 0.15rem; }
+  .reader-assessment { display: grid; gap: 0.45rem; width: min(100%, 34rem); margin-inline: auto; }
   .assessment-editor { margin-block-start: 0.55rem; }
   .assessment-editor summary { width: max-content; cursor: pointer; color: var(--accent); font-size: 0.76rem; font-weight: 650; }
   .assessment-form { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.45rem; align-items: center; margin-block-start: 0.5rem; }
@@ -490,7 +495,10 @@
   .comment-head { display: flex; justify-content: space-between; gap: 0.8rem; color: var(--muted); font-size: 0.76rem; }
   .comment-head strong { color: var(--role-colour); }
   .comment-body { white-space: pre-wrap; line-height: 1.55; }
+  .comment-actions { display: flex; flex-wrap: wrap; gap: 0.9rem; }
   .comment-edit { justify-self: start; border: 0; background: none; color: var(--accent); font-size: 0.78rem; text-decoration: underline; }
+  .comment-delete { justify-self: start; border: 0; background: none; color: #e08b8b; font-size: 0.78rem; text-decoration: underline; }
+  .comment-delete:disabled { opacity: 0.55; }
   .comments-form { display: grid; gap: 0.7rem; padding-block-start: 0.35rem; border-top: 1px solid #252b32; }
   .comments-lock { padding: 0.85rem; border: 1px solid #303740; border-radius: 10px; color: var(--muted); background: #101318; }
   .pending-decision { padding: 0.65rem 0.8rem; border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent); border-radius: 10px; background: color-mix(in srgb, var(--accent) 9%, transparent); color: var(--ink); font-size: 0.85rem; }

@@ -119,6 +119,39 @@ test('an edited comment replaces the earlier visible version without deleting hi
   ]);
 });
 
+test('a withdrawn comment leaves the thread while both rows stay in the history', () => {
+  const history = [
+    { id: 'original', reviewerId: 'author', decision: 'priority-approved', notes: 'please reconsider the runtime', affectsDecision: true, createdAt: '2026-08-01T08:00:00Z' },
+    { id: 'tombstone', reviewerId: 'author', supersedesReviewId: 'original', decision: 'priority-approved', notes: '', affectsDecision: false, createdAt: '2026-08-01T09:00:00Z' },
+  ];
+
+  assert.deepEqual(visibleCommentReviews(history), []);
+  // The delete is an added row, not a removal: nothing was dropped from the record.
+  assert.equal(history.length, 2);
+  assert.equal(history[0].notes, 'please reconsider the runtime');
+});
+
+test('withdrawing a comment never changes the project decision', () => {
+  const reviews = [
+    { id: 'decision', reviewerId: 'management', decision: 'schedule-approved', affectsDecision: true, createdAt: '2026-08-16T10:00:00Z' },
+    { id: 'comment', reviewerId: 'advisor', decision: 'canceled', notes: 'A later note', affectsDecision: false, createdAt: '2026-08-16T11:00:00Z' },
+    { id: 'withdrawn', reviewerId: 'advisor', supersedesReviewId: 'comment', decision: 'canceled', notes: '', affectsDecision: false, createdAt: '2026-08-16T12:00:00Z' },
+  ];
+
+  assert.equal(conceptStatus({ reviews }), 'approved');
+  assert.deepEqual(visibleCommentReviews(reviews), []);
+});
+
+test('withdrawing one comment leaves every other author untouched', () => {
+  const reviews = [
+    { id: 'mine', reviewerId: 'advisor', decision: 'canceled', notes: 'my note', affectsDecision: false, createdAt: '2026-08-16T10:00:00Z' },
+    { id: 'theirs', reviewerId: 'management', decision: 'schedule-approved', notes: 'their note', affectsDecision: true, createdAt: '2026-08-16T11:00:00Z' },
+    { id: 'withdrawn', reviewerId: 'advisor', supersedesReviewId: 'mine', decision: 'canceled', notes: '', affectsDecision: false, createdAt: '2026-08-16T12:00:00Z' },
+  ];
+
+  assert.deepEqual(visibleCommentReviews(reviews).map(({ id }) => id), ['theirs']);
+});
+
 test('adding or editing a comment never changes the project decision', () => {
   const reviews = [
     { id: 'decision', reviewerId: 'management', decision: 'schedule-approved', affectsDecision: true, createdAt: '2026-08-16T10:00:00Z' },

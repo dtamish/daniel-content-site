@@ -541,6 +541,95 @@ test('every concept card shows its timing and budget estimate at a glance', () =
   assert.match(styles, /assessment-chip\.is-high/);
 });
 
+test('every band badge carries the exact money or calendar range from the Bands sheet', () => {
+  const i18n = readFileSync(join(root, 'src/lib/i18n.ts'), 'utf8');
+  const reviewScript = readFileSync(join(root, 'src/scripts/review-app.ts'), 'utf8');
+  const styles = readFileSync(join(root, 'src/styles/room.css'), 'utf8');
+  const markup = readFileSync(join(root, 'src/components/ReviewApp.astro'), 'utf8');
+
+  // The figures are the Bands sheet, to the shekel. A drift here is a wrong number
+  // shown to management, so they are asserted literally rather than by shape.
+  for (const money of ['₪30,840–52,320', '₪113,880–158,640', '₪417,240–641,280']) {
+    assert.equal(i18n.split(money).length - 1, 2, `both languages must ship ${money}`);
+  }
+  for (const english of ['up to ', ' weeks', ' months']) {
+    assert.ok(i18n.includes(english), `missing English calendar range part: ${english}`);
+  }
+  for (const hebrew of ['8–20', '5–15', 'שבועות', 'חודשים', 'עד ']) {
+    assert.ok(i18n.includes(hebrew), `missing Hebrew calendar range part: ${hebrew}`);
+  }
+
+  // Every dashed range that can land in a right-to-left line is wrapped in
+  // U+2066 / U+2069. Measured in a browser: without the isolate, Hebrew paints
+  // "8-20 שבועות" as "20-8". The marks are invisible, so the reader still sees
+  // exactly the Bands figures.
+  // The source file keeps the two marks as escape sequences so they stay visible to
+  // anyone reading it; the escape text is what is asserted here.
+  const backslash = String.fromCharCode(92);
+  const LRI = backslash + 'u2066';
+  const PDI = backslash + 'u2069';
+  for (const numbers of ['₪30,840–52,320', '₪113,880–158,640', '₪417,240–641,280', '8–20', '5–15']) {
+    assert.ok(i18n.split(LRI + numbers + PDI).length - 1 >= 1,
+      `range is not bidi-isolated: ${numbers}`);
+  }
+
+  // The range is adjacent to the band on the badge itself, not hidden in a tooltip,
+  // and it is isolated so a Hebrew card cannot reorder the digits.
+  assert.match(reviewScript, /create\('bdi', 'assessment-range', range\)/);
+  assert.doesNotMatch(reviewScript, /title\s*=\s*strings\.assessment\.(budgetRanges|speedRanges)/);
+  assert.match(styles, /\.assessment-range \{/);
+
+  // Grid and list share one card renderer; the reader detail and the editor use the
+  // same ranges, so all four surfaces are covered by one source of truth.
+  assert.match(reviewScript, /article\.append\(renderAssessment\(concept\)\)/);
+  assert.match(reviewScript, /el\.readerAssessment\.replaceChildren\(chips/);
+  assert.match(markup, /data-reader-assessment/);
+  assert.match(reviewScript, /strings\.assessment\.speed\[value\]\} · \$\{strings\.assessment\.speedRanges\[value\]/);
+  assert.match(reviewScript, /strings\.assessment\.budgetValues\[value\]\} · \$\{strings\.assessment\.budgetRanges\[value\]/);
+
+  // An unassessed concept keeps saying so instead of borrowing a band's numbers.
+  assert.match(reviewScript, /concept\.assessment \? strings\.assessment\.speedRanges\[concept\.assessment\.productionSpeed\] : ''/);
+  assert.match(reviewScript, /concept\.assessment \? strings\.assessment\.budgetRanges\[concept\.assessment\.budgetLevel\] : ''/);
+
+  // The numbers are per finished piece, and the room says so without inventing a VAT claim.
+  assert.match(i18n, /not a slate total and not a series commitment/);
+  assert.match(i18n, /לא סך של סלייט ולא התחייבות לסדרה/);
+  assert.doesNotMatch(i18n, /VAT|מע"מ|מע״מ/);
+});
+
+test('the band colours and the estimate sorting are untouched by the ranges', () => {
+  const styles = readFileSync(join(root, 'src/styles/room.css'), 'utf8');
+  const reviewState = readFileSync(join(root, 'src/lib/review-state.mjs'), 'utf8');
+  assert.match(styles, /\.assessment-chip\.is-fast, \.assessment-chip\.is-low/);
+  assert.match(styles, /\.assessment-chip\.is-medium/);
+  assert.match(styles, /\.assessment-chip\.is-slow, \.assessment-chip\.is-high/);
+  assert.match(styles, /\.assessment-chip\.is-unassessed/);
+  assert.match(reviewState, /speed: Object\.freeze\(\{ fast: 0, medium: 1, slow: 2 \}\)/);
+  assert.match(reviewState, /budget: Object\.freeze\(\{ low: 0, medium: 1, high: 2 \}\)/);
+});
+
+test('a reviewer may withdraw only their own comment, and the server decides that', () => {
+  const reviewScript = readFileSync(join(root, 'src/scripts/review-app.ts'), 'utf8');
+  const migration = readFileSync(join(root, 'supabase/migrations/202608160004_open_reviewer_access.sql'), 'utf8');
+
+  // The button is offered only to the author, on the same gate the edit button uses.
+  assert.match(reviewScript, /if \(review\.isOwn && status !== 'pending'\) \{/);
+  assert.match(reviewScript, /create\('button', 'comment-delete', strings\.deleteComment\)/);
+  assert.match(reviewScript, /if \(!active \|\| !identity \|\| !review\.isOwn \|\| !review\.id\) return;/);
+
+  // A withdrawal is an appended row that carries no note and no decision weight.
+  assert.match(reviewScript, /affectsDecision: false,\s+supersedesReviewId: review\.id,/);
+  assert.doesNotMatch(reviewScript, /\.delete\(\)/);
+
+  // The rule itself lives in the database: a supersede is accepted only against a row
+  // owned by auth.uid(), and review rows can never be updated or deleted.
+  assert.match(migration, /previous\.reviewer_id = auth\.uid\(\)/);
+  assert.match(migration, /new\.reviewer_id := profile_record\.id;/);
+  const appendOnly = readFileSync(join(root, 'supabase/migrations/202608060003_append_only_reviews.sql'), 'utf8');
+  assert.match(appendOnly, /create trigger reviews_prevent_update/);
+  assert.match(appendOnly, /create trigger reviews_prevent_delete/);
+});
+
 test('draft content cannot leak into public output', () => {
   const output = walk(dist)
     .filter((path) => ['.html', '.xml', '.txt'].includes(extname(path)))

@@ -60,6 +60,7 @@ if (appRoot) {
     reader: need<HTMLElement>('[data-reader]'),
     readerTitle: need<HTMLElement>('[data-reader-title]'),
     editorialReaderBadge: need<HTMLElement>('[data-editorial-reader-badge]'),
+    readerAssessment: need<HTMLElement>('[data-reader-assessment]'),
     pageCount: need<HTMLElement>('[data-page-count]'),
     stage: need<HTMLElement>('[data-stage]'),
     track: need<HTMLElement>('[data-track]'),
@@ -435,27 +436,45 @@ if (appRoot) {
     }
   }
 
-  function renderAssessment(concept: Concept) {
-    const panel = create('div', 'assessment-panel');
+  /**
+   * The three chips a concept is read by. A band name on its own says nothing about
+   * scale, so each band carries its money or calendar range from the Bands sheet right
+   * beside it. The range sits in a <bdi> so a Hebrew card cannot reorder the digits.
+   * An unassessed concept shows no range at all rather than a guessed one.
+   */
+  function renderAssessmentChips(concept: Concept) {
     const chips = create('div', 'assessment-chips');
     const speedChip = create('span', 'assessment-chip assessment-speed');
     const budgetChip = create('span', 'assessment-chip assessment-budget');
     const categoryChip = create('span', 'assessment-chip assessment-category');
-    const updateChip = (chip: HTMLElement, label: string, value: string, level: string) => {
+    const updateChip = (chip: HTMLElement, label: string, value: string, level: string, range = '') => {
       chip.className = `assessment-chip is-${level}`;
-      chip.replaceChildren(create('span', 'assessment-label', label), create('strong', 'assessment-value', value));
+      const parts: HTMLElement[] = [
+        create('span', 'assessment-label', label),
+        create('strong', 'assessment-value', value),
+      ];
+      if (range) parts.push(create('bdi', 'assessment-range', range));
+      chip.replaceChildren(...parts);
     };
     const updateChips = () => {
       const speed = concept.assessment?.productionSpeed ?? 'unassessed';
       const budget = concept.assessment?.budgetLevel ?? 'unassessed';
       updateChip(categoryChip, strings.assessment.category, strings.categories[concept.category], 'category');
       updateChip(speedChip, strings.assessment.productionSpeed,
-        concept.assessment ? strings.assessment.speed[concept.assessment.productionSpeed] : strings.assessment.unassessed, speed);
+        concept.assessment ? strings.assessment.speed[concept.assessment.productionSpeed] : strings.assessment.unassessed, speed,
+        concept.assessment ? strings.assessment.speedRanges[concept.assessment.productionSpeed] : '');
       updateChip(budgetChip, strings.assessment.budget,
-        concept.assessment ? strings.assessment.budgetValues[concept.assessment.budgetLevel] : strings.assessment.unassessed, budget);
+        concept.assessment ? strings.assessment.budgetValues[concept.assessment.budgetLevel] : strings.assessment.unassessed, budget,
+        concept.assessment ? strings.assessment.budgetRanges[concept.assessment.budgetLevel] : '');
     };
     updateChips();
     chips.append(categoryChip, speedChip, budgetChip);
+    return { chips, updateChips };
+  }
+
+  function renderAssessment(concept: Concept) {
+    const panel = create('div', 'assessment-panel');
+    const { chips, updateChips } = renderAssessmentChips(concept);
     panel.append(chips);
 
     if (identity?.kind === 'content_editor') {
@@ -475,7 +494,7 @@ if (appRoot) {
       speed.name = 'production-speed';
       speed.setAttribute('aria-label', strings.assessment.productionSpeed);
       for (const value of ['fast', 'medium', 'slow'] as ProductionSpeed[]) {
-        const option = new Option(strings.assessment.speed[value], value);
+        const option = new Option(`${strings.assessment.speed[value]} · ${strings.assessment.speedRanges[value]}`, value);
         option.selected = value === (concept.assessment?.productionSpeed ?? 'medium');
         speed.add(option);
       }
@@ -483,7 +502,7 @@ if (appRoot) {
       budget.name = 'budget-level';
       budget.setAttribute('aria-label', strings.assessment.budget);
       for (const value of ['low', 'medium', 'high'] as BudgetLevel[]) {
-        const option = new Option(strings.assessment.budgetValues[value], value);
+        const option = new Option(`${strings.assessment.budgetValues[value]} · ${strings.assessment.budgetRanges[value]}`, value);
         option.selected = value === (concept.assessment?.budgetLevel ?? 'medium');
         budget.add(option);
       }
@@ -492,6 +511,7 @@ if (appRoot) {
       const status = create('span', 'assessment-status');
       status.setAttribute('role', 'status');
       form.append(category, speed, budget, save, status);
+      form.append(create('p', 'assessment-note', strings.assessment.bandsNote));
       form.addEventListener('submit', async (event) => {
         event.preventDefault();
         if (!identity || identity.kind !== 'content_editor') return;
@@ -552,6 +572,59 @@ if (appRoot) {
     return [...active.reviews].reverse().find((review) => review.isOwn && review.decision !== 'reset') ?? null;
   }
 
+  /**
+   * Withdrawing a comment is another append-only event, never a delete. The new row
+   * supersedes the author's own comment and carries no note, so the thread loses the
+   * comment while the history keeps both rows. It repeats the decision it was attached
+   * to and is flagged as not affecting the decision, so nothing about the concept's
+   * production status moves. The server trigger accepts a supersede only when the row
+   * being superseded belongs to auth.uid(), so another reviewer cannot do this.
+   */
+  async function deleteOwnComment(review: Review, button: HTMLButtonElement) {
+    if (!active || !identity || !review.isOwn || !review.id) return;
+    if (!window.confirm(strings.deleteCommentConfirm)) return;
+    const concept = active;
+    button.disabled = true;
+    el.commentsStatus.textContent = strings.decisionSaving;
+    try {
+      const result = await saveReview({
+        conceptId: concept.id,
+        decision: review.decision,
+        notes: '',
+        identity,
+        reviewerId: localReviewerId,
+        affectsDecision: false,
+        supersedesReviewId: review.id,
+      });
+      concept.reviews.push({
+        id: result.id,
+        reviewerId: result.reviewerId,
+        reviewerName: strings.people[result.reviewerRole],
+        reviewerRole: result.reviewerRole,
+        isOwn: true,
+        decision: review.decision,
+        notes: '',
+        affectsDecision: false,
+        clearPriorNotes: false,
+        supersedesReviewId: review.id,
+        createdAt: result.createdAt,
+      });
+      if (editingReviewId === review.id) {
+        editingReviewId = null;
+        editingDecision = '';
+        el.commentsInput.value = '';
+      }
+      el.commentsStatus.textContent = strings.commentDeleted;
+      renderComments();
+      render();
+    } catch (error) {
+      button.disabled = false;
+      el.commentsStatus.textContent = error instanceof Error
+        ? `${strings.commentDeleteFailed} ${error.message}`
+        : strings.commentDeleteFailed;
+    }
+  }
+
   function renderComments() {
     if (!active) return;
     const labels = decisionLabels(locale) as Record<string, string>;
@@ -572,7 +645,11 @@ if (appRoot) {
         create('span', '', labels[review.decision] ?? strings.tabs.pending),
       );
       article.append(head, create('p', 'comment-body', review.notes));
+      // Only the author of a comment may revise or withdraw it, and only while the
+      // concept is out of Pending, exactly as the existing edit gate works. The server
+      // re-checks the author against auth.uid(); this is presentation, not the rule.
       if (review.isOwn && status !== 'pending') {
+        const actions = create('div', 'comment-actions');
         const edit = create('button', 'comment-edit', strings.editComment);
         edit.type = 'button';
         edit.addEventListener('click', () => {
@@ -582,7 +659,11 @@ if (appRoot) {
           el.commentsInput.focus();
           el.commentsSubmit.textContent = strings.saveComment;
         });
-        article.append(edit);
+        const remove = create('button', 'comment-delete', strings.deleteComment);
+        remove.type = 'button';
+        remove.addEventListener('click', () => void deleteOwnComment(review, remove));
+        actions.append(edit, remove);
+        article.append(actions);
       }
       el.commentsList.append(article);
     }
@@ -709,6 +790,8 @@ if (appRoot) {
   }
 
   function configureDecisionStage(concept: Concept) {
+    const { chips } = renderAssessmentChips(concept);
+    el.readerAssessment.replaceChildren(chips, create('p', 'assessment-note', strings.assessment.bandsNote));
     const editorialDraft = identity?.kind === 'content_editor' && concept.publicationStatus === 'draft';
     el.editorialReaderBadge.hidden = !editorialDraft;
     el.editorialReaderBadge.textContent = editorialDraft ? strings.editorialReviewOnly : '';

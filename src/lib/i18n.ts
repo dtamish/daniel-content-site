@@ -79,6 +79,10 @@ type Strings = {
   addComment: string;
   saveComment: string;
   editComment: string;
+  deleteComment: string;
+  deleteCommentConfirm: string;
+  commentDeleted: string;
+  commentDeleteFailed: string;
   editedComment: string;
   commentSaved: string;
   chooseDecisionFirst: string;
@@ -109,6 +113,17 @@ type Strings = {
     unassessed: string;
     speed: Record<'fast' | 'medium' | 'slow', string>;
     budgetValues: Record<'low' | 'medium' | 'high', string>;
+    /**
+     * Calendar time each band takes, from the Bands sheet, shown beside the band name.
+     * The numeric run is wrapped in U+2066 / U+2069 (isolate / pop). Without it a Hebrew
+     * card paints "8-20 שבועות" as "20-8", because the dash between two numbers inherits
+     * the paragraph's right-to-left direction. The isolates are invisible; the reader
+     * sees exactly the range the Bands sheet states.
+     */
+    speedRanges: Record<'fast' | 'medium' | 'slow', string>;
+    /** Money each band costs, from the Bands sheet, isolated the same way. */
+    budgetRanges: Record<'low' | 'medium' | 'high', string>;
+    bandsNote: string;
   };
 };
 
@@ -189,6 +204,10 @@ const en: Strings = {
   addComment: 'Add a comment',
   saveComment: 'Save comment',
   editComment: 'Edit my comment',
+  deleteComment: 'Delete my comment',
+  deleteCommentConfirm: 'Delete this comment? It disappears from the thread, and the record of it is kept for the history.',
+  commentDeleted: 'Comment deleted.',
+  commentDeleteFailed: 'Could not delete the comment.',
   editedComment: 'Edited',
   commentSaved: 'Comment saved.',
   chooseDecisionFirst: 'Choose a decision first.',
@@ -213,6 +232,17 @@ const en: Strings = {
     failed: 'Could not save the estimate.', unassessed: 'Not yet estimated',
     speed: { fast: 'Fast', medium: 'Medium', slow: 'Slow' },
     budgetValues: { low: 'Low', medium: 'Medium', high: 'High' },
+    speedRanges: {
+      fast: 'up to ⁦8⁩ weeks',
+      medium: '⁦8–20⁩ weeks',
+      slow: '⁦5–15⁩ months',
+    },
+    budgetRanges: {
+      low: '\u2066₪30,840–52,320\u2069',
+      medium: '\u2066₪113,880–158,640\u2069',
+      high: '\u2066₪417,240–641,280\u2069',
+    },
+    bandsNote: 'Reference range for one standalone film or one episode — not a slate total and not a series commitment. The sums already include overhead and contingency.',
   },
 };
 
@@ -293,6 +323,10 @@ const he: Strings = {
   addComment: 'הוספת הערה',
   saveComment: 'שמירת הערה',
   editComment: 'עריכת ההערה שלי',
+  deleteComment: 'מחיקת ההערה שלי',
+  deleteCommentConfirm: 'למחוק את ההערה? היא תיעלם מהשרשור, והתיעוד שלה נשמר להיסטוריה.',
+  commentDeleted: 'ההערה נמחקה.',
+  commentDeleteFailed: 'לא הצלחנו למחוק את ההערה.',
   editedComment: 'נערכה',
   commentSaved: 'ההערה נשמרה.',
   chooseDecisionFirst: 'צריך לבחור החלטה קודם.',
@@ -317,6 +351,17 @@ const he: Strings = {
     failed: 'שמירת ההערכה נכשלה.', unassessed: 'טרם הוערך',
     speed: { fast: 'מהיר', medium: 'בינוני', slow: 'איטי' },
     budgetValues: { low: 'נמוך', medium: 'בינוני', high: 'גבוה' },
+    speedRanges: {
+      fast: 'עד \u20668\u2069 שבועות',
+      medium: '\u20668–20\u2069 שבועות',
+      slow: '\u20665–15\u2069 חודשים',
+    },
+    budgetRanges: {
+      low: '\u2066₪30,840–52,320\u2069',
+      medium: '\u2066₪113,880–158,640\u2069',
+      high: '\u2066₪417,240–641,280\u2069',
+    },
+    bandsNote: 'טווח ייחוס לסרט עצמאי אחד או לפרק אחד — לא סך של סלייט ולא התחייבות לסדרה. הסכומים כוללים תקורה ורזרבה.',
   },
 };
 

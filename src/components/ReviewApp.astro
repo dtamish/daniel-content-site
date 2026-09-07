@@ -81,6 +81,7 @@ const decisions = decisionLabels(DEFAULT_LOCALE);
             <form class="decide" data-decision-form>
               <p class="decide-kicker" data-decision-kicker data-i18n="decisionFor">{s.decisionFor}</p>
               <h3 data-decision-title></h3>
+              <div class="reader-assessment" data-reader-assessment></div>
               <p class="decision-help" data-decision-help data-i18n="decisionHelp">{s.decisionHelp}</p>
               <div class="decide-options" data-decision-options>
                 {Object.entries(decisions).map(([value, label]) => <label><input type="radio" name="decision" value={value} required /><span data-decision-label={value}>{label}</span></label>)}
