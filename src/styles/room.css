@@ -629,12 +629,12 @@
 .room .card { display: flex; flex-direction: column; }
 .room .card-assessment-footer { margin-block-start: auto; border-block-start: 1px solid var(--soft-line); border-block-end: 0; padding: 0.7rem 1rem 0.5rem; background: var(--surface); }
 .room .card-assessment-footer .assessment-chips { gap: 0.75rem; }
-.room .card-assessment-footer .assessment-chip { border: 0; border-radius: 0; background: transparent; padding: 0; min-height: 0; gap: 0.15rem; }
-.room .card-assessment-footer .assessment-label { font-size: 0.875rem; line-height: 1.35; }
-.room .card-assessment-footer .assessment-value { font-size: 0.95rem; }
-.room .card-assessment-footer .assessment-range { font-size: 0.875rem; line-height: 1.4; }
+.room .card-assessment-footer .assessment-chip:not(.is-category) { border: 0; border-radius: 0; background: transparent; padding: 0; min-height: 0; gap: 0.15rem; }
+.room .card-assessment-footer .assessment-label { font-size: 14px; line-height: 1.35; }
+.room .card-assessment-footer .assessment-value { font-size: 15px; }
+.room .card-assessment-footer .assessment-range { font-size: 14px; line-height: 1.4; }
 .room .card-assessment-footer .assessment-editor { margin-block-start: 0.25rem; }
-.room .card-assessment-footer .assessment-editor summary { font-size: 0.9rem; }
+.room .card-assessment-footer .assessment-editor summary { font-size: 14px; }
 .room-view-list .card-assessment-footer .assessment-chips { grid-template-columns: repeat(2, minmax(0, 1fr)); max-width: 36rem; }
 .room-view-list .card-status { display: block; }
 
