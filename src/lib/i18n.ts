@@ -37,6 +37,7 @@ type Strings = {
   zoomOut: string;
   loadingDocument: string;
   documentFailed: string;
+  documentLink: (url: string) => string;
   decideHere: string;
   decisionMarker: string;
   decisionFor: string;
@@ -163,6 +164,7 @@ const en: Strings = {
   zoomOut: 'Zoom out',
   loadingDocument: 'Loading document…',
   documentFailed: 'We could not open this document.',
+  documentLink: (url) => `Link in the document: ${url} — opens in a new tab`,
   decideHere: 'Decision',
   decisionMarker: 'Decision',
   decisionFor: 'Choose a decision for',
@@ -283,6 +285,7 @@ const he: Strings = {
   zoomOut: 'הקטנה',
   loadingDocument: 'טוען מסמך…',
   documentFailed: 'לא הצלחנו לפתוח את המסמך.',
+  documentLink: (url) => `קישור במסמך: ${url} — נפתח בלשונית חדשה`,
   decideHere: 'החלטה',
   decisionMarker: 'החלטה',
   decisionFor: 'בחירת החלטה עבור',
