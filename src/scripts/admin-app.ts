@@ -708,9 +708,11 @@ if (app) {
       const { data, error } = await client.from('concepts')
         .update({ banner_path: original })
         .eq('id', concept.id)
+        .eq('banner_path', concept.banner_path)
         .select('id,banner_path')
-        .single();
+        .maybeSingle();
       if (error) throw error;
+      if (!data) throw new Error('הבאנר השתנה בינתיים. יש לרענן לפני שחזור כדי לא לדרוס עריכה אחרת.');
       concept.banner_path = data.banner_path;
       bannerStatus.textContent = `הוחזר הבאנר הקודם: ${data.banner_path}`;
       await loadBannerConcepts();
