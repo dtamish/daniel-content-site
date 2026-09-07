@@ -848,6 +848,10 @@ if (appRoot) {
     view = 0;
     zoom = 1;
     el.readerTitle.textContent = concept.title;
+    // The bar line truncates a long title with an ellipsis, so the untruncated title
+    // stays reachable: as the element's own text for assistive technology (it names the
+    // reader dialog) and as a tooltip for a pointer.
+    el.readerTitle.title = concept.title;
     el.decisionTitle.textContent = concept.title;
     el.decisionForm.reset();
     configureDecisionStage(concept);
@@ -903,6 +907,7 @@ if (appRoot) {
     editingReviewId = null;
     pageCount = 0;
     view = 0;
+    el.readerTitle.title = '';
     const context = el.canvas.getContext('2d');
     context?.clearRect(0, 0, el.canvas.width, el.canvas.height);
     el.canvas.width = 0;
@@ -1121,7 +1126,15 @@ if (appRoot) {
   need<HTMLButtonElement>('[data-change-identity]').addEventListener('click', () => el.identityDialog.showModal());
   need<HTMLButtonElement>('[data-close-reader]').addEventListener('click', closeReader);
   el.openComments.addEventListener('click', () => switchReaderView('comments'));
-  el.viewDocument.addEventListener('click', () => switchReaderView('document'));
+  // Leaving the comments panel keeps the page the reader was on, and hands focus back
+  // to the control that opened the panel rather than dropping it on the document body.
+  el.viewDocument.addEventListener('click', () => {
+    switchReaderView('document');
+    const back = el.openComments.hidden
+      ? need<HTMLButtonElement>('[data-close-reader]')
+      : el.openComments;
+    back.focus({ preventScroll: true });
+  });
   el.resetDecision.addEventListener('click', () => { if (active) openResetDialog(active); });
   el.resetCancel.addEventListener('click', () => { resetTarget = null; el.resetDialog.close(); });
   el.resetDialog.addEventListener('close', () => { resetTarget = null; });

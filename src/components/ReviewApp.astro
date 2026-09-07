@@ -60,16 +60,22 @@ const decisions = decisionLabels(DEFAULT_LOCALE);
   </dialog>
 
   <div class="reader" data-reader role="dialog" aria-modal="true" aria-labelledby="reader-title" tabindex="-1" hidden>
+    <!-- Two economical lines: what the document is, then how to work with it.
+         On a wide screen they share a single row. -->
     <div class="reader-bar">
-      <button class="icon" type="button" data-close-reader aria-label={s.close}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg></button>
-      <h2 id="reader-title" data-reader-title></h2>
-      <span class="reader-editorial-badge" data-editorial-reader-badge hidden></span>
-      <button class="reader-comments-action" type="button" data-open-comments hidden>{s.commentsAction(0)}</button>
-      <div class="reader-zoom">
-        <button class="icon" type="button" data-zoom-out aria-label={s.zoomOut}><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6" /><path d="M8 11h6M20 20l-4.5-4.5" /></svg></button>
-        <button class="icon" type="button" data-zoom-in aria-label={s.zoomIn}><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6" /><path d="M8 11h6M11 8v6M20 20l-4.5-4.5" /></svg></button>
+      <div class="reader-bar-line reader-bar-head">
+        <button class="icon" type="button" data-close-reader aria-label={s.close}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg></button>
+        <h2 id="reader-title" data-reader-title></h2>
+        <div class="reader-zoom">
+          <button class="icon" type="button" data-zoom-out aria-label={s.zoomOut}><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6" /><path d="M8 11h6M20 20l-4.5-4.5" /></svg></button>
+          <button class="icon" type="button" data-zoom-in aria-label={s.zoomIn}><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6" /><path d="M8 11h6M11 8v6M20 20l-4.5-4.5" /></svg></button>
+        </div>
       </div>
-      <span class="reader-count" data-page-count></span>
+      <div class="reader-bar-line reader-bar-controls">
+        <button class="reader-comments-action" type="button" data-open-comments hidden>{s.commentsAction(0)}</button>
+        <span class="reader-editorial-badge" data-editorial-reader-badge hidden></span>
+        <span class="reader-count" data-page-count></span>
+      </div>
     </div>
 
 
