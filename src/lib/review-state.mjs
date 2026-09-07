@@ -24,9 +24,10 @@ export function decisionLabel(decision, locale = 'he') {
  * reads as groups at a glance. 'film' holds the standalone documentaries until someone
  * decides which are short and which run thirty minutes.
  */
-export const CATEGORIES = Object.freeze(['film-long', 'film-short', 'film', 'series', 'digital', 'podcast']);
+export const CATEGORIES = Object.freeze(['FLAGSHIP SERIES', 'film-long', 'film-short', 'film', 'series', 'digital', 'podcast']);
 
 export const CATEGORY_COLOURS = Object.freeze({
+  'FLAGSHIP SERIES': '#d4c19b',
   'film-long': '#b98cff',
   'film-short': '#6aa9ff',
   film: '#8fa3bd',

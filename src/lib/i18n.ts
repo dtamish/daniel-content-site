@@ -26,7 +26,7 @@ type Strings = {
   identityAdvisorName: string;
   people: Record<ReviewerRole, string>;
   tabs: Record<'pending' | 'approved' | 'rejected', string>;
-  categories: Record<'film-long' | 'film-short' | 'film' | 'series' | 'digital' | 'podcast', string>;
+  categories: Record<'FLAGSHIP SERIES' | 'film-long' | 'film-short' | 'film' | 'series' | 'digital' | 'podcast', string>;
   empty: Record<'pending' | 'approved' | 'rejected', string>;
   open: string;
   close: string;
@@ -141,6 +141,7 @@ const en: Strings = {
   people: { management: 'Management', content_editor: 'Content editor', advisor: 'Advisor' },
   tabs: { pending: 'Pending', approved: 'Approved', rejected: 'Not approved' },
   categories: {
+    'FLAGSHIP SERIES': 'FLAGSHIP SERIES',
     'film-long': 'Long film (30 min)',
     'film-short': 'Short film',
     film: 'Film',
@@ -260,6 +261,7 @@ const he: Strings = {
   people: { management: 'הנהלה', content_editor: 'עורך/ת תוכן', advisor: 'יועץ/ת' },
   tabs: { pending: 'ממתינים', approved: 'מאושרים', rejected: 'לא אושרו' },
   categories: {
+    'FLAGSHIP SERIES': 'FLAGSHIP SERIES',
     'film-long': 'סרט ארוך (30 דקות)',
     'film-short': 'סרט קצר',
     film: 'סרט',

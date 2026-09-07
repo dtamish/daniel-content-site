@@ -5,7 +5,7 @@ import { DEFAULT_LOCALE, STRINGS, type Locale, type ReviewerRole } from './i18n'
 export type Identity = { kind: ReviewerRole; name: string };
 export type ProductionSpeed = 'fast' | 'medium' | 'slow';
 export type BudgetLevel = 'low' | 'medium' | 'high';
-export type ConceptCategory = 'series' | 'film' | 'film-short' | 'film-long' | 'digital' | 'podcast';
+export type ConceptCategory = 'FLAGSHIP SERIES' | 'series' | 'film' | 'film-short' | 'film-long' | 'digital' | 'podcast';
 export type ConceptAssessment = {
   productionSpeed: ProductionSpeed;
   budgetLevel: BudgetLevel;

@@ -1,7 +1,7 @@
 import * as pdfjs from 'pdfjs-dist';
 import workerUrl from 'pdfjs-dist/build/pdf.worker.mjs?url';
 import {
-  CATEGORY_COLOURS, canManageOwnComment, canWriteComment, conceptCategory, conceptStatus,
+  CATEGORIES, CATEGORY_COLOURS, canManageOwnComment, canWriteComment, conceptCategory, conceptStatus,
   countByStatus, conceptsWithStatus, decisionLabels, groupByCategory, latestReview,
   sortApprovedConcepts, visibleCommentReviews,
 } from '../lib/review-state.mjs';
@@ -311,6 +311,25 @@ if (appRoot) {
 
   function render() {
     productionDiagram.sync();
+    let categoryFilter = root.querySelector<HTMLSelectElement>('[data-category-filter]');
+    if (!categoryFilter) {
+      categoryFilter = document.createElement('select');
+      categoryFilter.dataset.categoryFilter = '';
+      categoryFilter.className = 'assessment-select';
+      categoryFilter.style.minHeight = '44px';
+      categoryFilter.style.maxWidth = '100%';
+      categoryFilter.style.marginBlock = '12px';
+      categoryFilter.addEventListener('change', render);
+      el.grid.before(categoryFilter);
+    }
+    const selectedCategory = categoryFilter.value || 'all';
+    categoryFilter.setAttribute('aria-label', strings.assessment.category);
+    categoryFilter.replaceChildren(new Option(locale === 'he' ? 'כל הקטגוריות' : 'All categories', 'all'));
+    for (const category of CATEGORIES) {
+      categoryFilter.add(new Option(strings.categories[category as ConceptCategory], category));
+    }
+    categoryFilter.value = selectedCategory;
+>>>>>>> 395e55b (feat: prepare scoped FLAGSHIP SERIES category (not deployed))
     el.grid.classList.toggle('room-view-list', catalogueView === 'list');
     const counts = countByStatus(concepts);
     for (const node of el.tabs.querySelectorAll<HTMLElement>('[data-count]')) {
@@ -322,7 +341,8 @@ if (appRoot) {
       button.setAttribute('aria-pressed', String(current));
     }
 
-    const baseVisible = conceptsWithStatus(concepts, tab) as Concept[];
+    const baseVisible = (conceptsWithStatus(concepts, tab) as Concept[])
+      .filter((concept) => selectedCategory === 'all' || conceptCategory(concept) === selectedCategory);
     const visible = tab !== 'rejected'
       ? sortApprovedConcepts(baseVisible, approvedSort) as Concept[]
       : baseVisible;
@@ -489,7 +509,7 @@ if (appRoot) {
       const category = create('select', 'assessment-select') as HTMLSelectElement;
       category.name = 'category';
       category.setAttribute('aria-label', strings.assessment.category);
-      for (const value of ['series', 'film', 'film-short', 'film-long', 'digital', 'podcast'] as ConceptCategory[]) {
+      for (const value of ['FLAGSHIP SERIES', 'series', 'film', 'film-short', 'film-long', 'digital', 'podcast'] as ConceptCategory[]) {
         const option = new Option(strings.categories[value], value);
         option.selected = value === concept.category;
         category.add(option);
