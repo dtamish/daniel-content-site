@@ -475,7 +475,9 @@ test('concept cards preserve the source banner composition', () => {
 
   assert.match(reviewScript, /image\.loading = 'lazy'/);
   assert.match(reviewScript, /image\.decoding = 'async'/);
-  assert.match(styles, /aspect-ratio: 1785 \/ 690/);
+  assert.match(styles, /\.card-banner img\s*\{[^}]*width: 100%;[^}]*height: auto;[^}]*object-fit: contain;/);
+  assert.doesNotMatch(styles, /object-fit: cover/);
+  assert.match(styles, /\.room-view-list \.card-banner\s*\{ display: block;/);
   assert.match(globals, /color-scheme: dark/);
   assert.match(globals, /--accent: #ff7a1a/);
 });
