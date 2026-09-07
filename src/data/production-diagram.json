@@ -1,0 +1,182 @@
+{
+  "title": "From Idea to Channel",
+  "subtitle": "The complete content production process \u2014 from the initial idea through to final upload on the site.",
+  "legend": [
+    "Creative / work stage",
+    "Approval / decision gate"
+  ],
+  "footer": "Process diagram \u2014 VOD content production",
+  "nodes": [
+    {
+      "id": "topics",
+      "step": 1,
+      "label": "Topics Proposed",
+      "sublabel": "by Management",
+      "kind": "work"
+    },
+    {
+      "id": "proposals",
+      "step": 1,
+      "label": "Content Proposals",
+      "sublabel": "",
+      "kind": "work"
+    },
+    {
+      "id": "idea",
+      "step": 2,
+      "label": "Idea",
+      "sublabel": "",
+      "kind": "work"
+    },
+    {
+      "id": "brief",
+      "step": 3,
+      "label": "Brief",
+      "sublabel": "",
+      "kind": "work"
+    },
+    {
+      "id": "approval4",
+      "step": 4,
+      "label": "Management Approval",
+      "sublabel": "+ advisors",
+      "kind": "gate"
+    },
+    {
+      "id": "research",
+      "step": 5,
+      "label": "Research",
+      "sublabel": "+ script",
+      "kind": "work"
+    },
+    {
+      "id": "producer",
+      "step": 5,
+      "label": "Producer",
+      "sublabel": "",
+      "kind": "work"
+    },
+    {
+      "id": "content",
+      "step": 6,
+      "label": "Content Approval",
+      "sublabel": "",
+      "kind": "work"
+    },
+    {
+      "id": "approval7",
+      "step": 7,
+      "label": "Management Approval",
+      "sublabel": "to begin filming",
+      "kind": "gate"
+    },
+    {
+      "id": "production",
+      "step": 8,
+      "label": "Production",
+      "sublabel": "",
+      "kind": "work"
+    },
+    {
+      "id": "editing",
+      "step": 9,
+      "label": "Editing",
+      "sublabel": "",
+      "kind": "work"
+    },
+    {
+      "id": "approval10",
+      "step": 10,
+      "label": "Management Approval",
+      "sublabel": "/ advisors",
+      "kind": "gate"
+    },
+    {
+      "id": "marketing",
+      "step": 11,
+      "label": "Marketing Content",
+      "sublabel": "",
+      "kind": "work"
+    },
+    {
+      "id": "online",
+      "step": 11,
+      "label": "Online Edit",
+      "sublabel": "Color+Sound",
+      "kind": "work"
+    },
+    {
+      "id": "upload",
+      "step": 12,
+      "label": "Upload to Site",
+      "sublabel": "",
+      "kind": "gate"
+    }
+  ],
+  "edges": [
+    {
+      "from": "topics",
+      "to": "idea"
+    },
+    {
+      "from": "proposals",
+      "to": "idea"
+    },
+    {
+      "from": "idea",
+      "to": "brief"
+    },
+    {
+      "from": "brief",
+      "to": "approval4"
+    },
+    {
+      "from": "approval4",
+      "to": "research"
+    },
+    {
+      "from": "approval4",
+      "to": "producer"
+    },
+    {
+      "from": "research",
+      "to": "content"
+    },
+    {
+      "from": "producer",
+      "to": "content"
+    },
+    {
+      "from": "content",
+      "to": "approval7"
+    },
+    {
+      "from": "approval7",
+      "to": "production"
+    },
+    {
+      "from": "production",
+      "to": "editing"
+    },
+    {
+      "from": "editing",
+      "to": "approval10"
+    },
+    {
+      "from": "approval10",
+      "to": "marketing"
+    },
+    {
+      "from": "approval10",
+      "to": "online"
+    },
+    {
+      "from": "marketing",
+      "to": "upload"
+    },
+    {
+      "from": "online",
+      "to": "upload"
+    }
+  ]
+}

@@ -11,6 +11,7 @@ import {
   type BudgetLevel, type ConceptAssessment, type ConceptCategory, type Identity, type ProductionSpeed,
 } from '../lib/concept-repository';
 import { withBase } from '../lib/urls';
+import { installProductionDiagram } from './production-diagram.mjs';
 
 pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
 
@@ -118,6 +119,7 @@ if (appRoot) {
   let pdf: pdfjs.PDFDocumentProxy | null = null;
   let loadingTask: pdfjs.PDFDocumentLoadingTask | null = null;
   let active: Concept | null = null;
+  const productionDiagram = installProductionDiagram({root, commentsButton: el.openComments, getConcept: () => active});
   let view = 0;            // 0..pageCount-1 are pages, pageCount is the decision panel
   let pageCount = 0;
   let zoom = 1;
@@ -308,6 +310,7 @@ if (appRoot) {
   }
 
   function render() {
+    productionDiagram.sync();
     el.grid.classList.toggle('room-view-list', catalogueView === 'list');
     const counts = countByStatus(concepts);
     for (const node of el.tabs.querySelectorAll<HTMLElement>('[data-count]')) {
@@ -554,6 +557,7 @@ if (appRoot) {
   }
 
   function switchReaderView(next: 'document' | 'comments') {
+    productionDiagram.sync();
     const comments = next === 'comments';
     el.documentPanel.hidden = comments;
     el.commentsPanel.hidden = !comments;
@@ -627,6 +631,7 @@ if (appRoot) {
   }
 
   function renderComments() {
+    productionDiagram.sync();
     if (!active) return;
     const labels = decisionLabels(locale) as Record<string, string>;
     const comments = visibleCommentReviews(active.reviews) as Review[];
@@ -812,6 +817,7 @@ if (appRoot) {
   async function openReader(concept: Concept, initialView: 'document' | 'comments' = 'document') {
     readerPreviousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     active = concept;
+    productionDiagram.sync();
     pendingDecision = '';
     editingDecision = '';
     editingReviewId = null;
@@ -858,6 +864,7 @@ if (appRoot) {
   }
 
   function closeReader() {
+    productionDiagram.close();
     el.reader.hidden = true;
     document.body.classList.remove('reader-open');
     renderToken += 1;
