@@ -407,7 +407,6 @@ if (appRoot) {
       article.style.setProperty('--group', editorialDraft
         ? colour
         : (CATEGORY_COLOURS[conceptCategory(concept) as keyof typeof CATEGORY_COLOURS] ?? colour));
-      article.append(renderAssessment(concept));
       const card = create('button', 'card-open');
       card.type = 'button';
       card.addEventListener('click', () => openReader(concept));
@@ -456,6 +455,10 @@ if (appRoot) {
         article.append(actions);
       }
 
+      // Comparison metadata belongs after the content and its actions in both views.
+      const footer = renderAssessment(concept);
+      footer.classList.add('card-assessment-footer');
+      article.append(footer);
       target.append(article);
     }
   }
@@ -466,7 +469,7 @@ if (appRoot) {
    * beside it. The range sits in a <bdi> so a Hebrew card cannot reorder the digits.
    * An unassessed concept shows no range at all rather than a guessed one.
    */
-  function renderAssessmentChips(concept: Concept) {
+  function renderAssessmentChips(concept: Concept, includeCategory = true) {
     const chips = create('div', 'assessment-chips');
     const speedChip = create('span', 'assessment-chip assessment-speed');
     const budgetChip = create('span', 'assessment-chip assessment-budget');
@@ -492,13 +495,14 @@ if (appRoot) {
         concept.assessment ? strings.assessment.budgetRanges[concept.assessment.budgetLevel] : '');
     };
     updateChips();
-    chips.append(categoryChip, speedChip, budgetChip);
+    if (includeCategory) chips.append(categoryChip);
+    chips.append(speedChip, budgetChip);
     return { chips, updateChips };
   }
 
   function renderAssessment(concept: Concept) {
     const panel = create('div', 'assessment-panel');
-    const { chips, updateChips } = renderAssessmentChips(concept);
+    const { chips, updateChips } = renderAssessmentChips(concept, false);
     panel.append(chips);
 
     if (identity?.kind === 'content_editor') {

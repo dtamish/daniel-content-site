@@ -625,6 +625,19 @@
   }
 }
 
+/* Card comparison footer: original banner/content first, neutral compact estimates last. */
+.room .card { display: flex; flex-direction: column; }
+.room .card-assessment-footer { margin-block-start: auto; border-block-start: 1px solid var(--soft-line); border-block-end: 0; padding: 0.7rem 1rem 0.5rem; background: var(--surface); }
+.room .card-assessment-footer .assessment-chips { gap: 0.75rem; }
+.room .card-assessment-footer .assessment-chip { border: 0; border-radius: 0; background: transparent; padding: 0; min-height: 0; gap: 0.15rem; }
+.room .card-assessment-footer .assessment-label { font-size: 0.875rem; line-height: 1.35; }
+.room .card-assessment-footer .assessment-value { font-size: 0.95rem; }
+.room .card-assessment-footer .assessment-range { font-size: 0.875rem; line-height: 1.4; }
+.room .card-assessment-footer .assessment-editor { margin-block-start: 0.25rem; }
+.room .card-assessment-footer .assessment-editor summary { font-size: 0.9rem; }
+.room-view-list .card-assessment-footer .assessment-chips { grid-template-columns: repeat(2, minmax(0, 1fr)); max-width: 36rem; }
+.room-view-list .card-status { display: block; }
+
 /* Approved neutral charcoal presentation; workflow remains unchanged. */
 :root,.room{--paper:#222222;--surface:#2c2c2c;--ink:#f5f5f5;--muted:#c8c8c8;--line:#777777;--soft-line:#505050;--accent:#ff9a46;--accent-ink:#202020;}
 html,body{background:#222222;color:#f5f5f5}body::before{background-image:none}
