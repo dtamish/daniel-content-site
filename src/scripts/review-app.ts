@@ -329,7 +329,7 @@ if (appRoot) {
       categoryFilter.add(new Option(strings.categories[category as ConceptCategory], category));
     }
     categoryFilter.value = selectedCategory;
->>>>>>> 395e55b (feat: prepare scoped FLAGSHIP SERIES category (not deployed))
+
     el.grid.classList.toggle('room-view-list', catalogueView === 'list');
     const counts = countByStatus(concepts);
     for (const node of el.tabs.querySelectorAll<HTMLElement>('[data-count]')) {
