@@ -665,7 +665,14 @@ html[lang="en"] .room :is(.card-summary,.card-status){font-weight:500;font-size:
 [data-approved-sort-label]{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
 .catalogue-tools select{width:100%;min-width:0;min-height:44px;height:44px;padding-block:0;font-size:1rem}
 .catalogue-view-buttons{display:flex;gap:0;flex-shrink:0;border:1px solid var(--soft-line);border-radius:8px;overflow:visible}
-.catalogue-view-buttons button{min-height:44px;min-width:44px;border:0;border-radius:6px;padding:0 12px;margin:0}
+.catalogue-view-buttons button{display:inline-flex;align-items:center;justify-content:center;flex:0 0 44px;width:44px;height:44px;min-height:44px;min-width:44px;gap:0;border:1px solid transparent;border-radius:6px;padding:0;margin:0}
+.catalogue-view-buttons button svg{display:block;flex:none;width:22px;height:22px}
+.catalogue-view-buttons [data-i18n]{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+.catalogue-view-buttons button.is-active{background:#454545;border-color:#999;color:#fff}
+.catalogue-view-buttons button:not(.is-active){color:#bdbdbd}
+.catalogue-view-buttons button:hover{background:#363636}
+.catalogue-view-buttons button.is-active:hover{background:#505050}
+.catalogue-view-buttons button:focus-visible{outline:2px solid #fff;outline-offset:3px;position:relative;z-index:1}
 @media(max-width:700px){
 .room-top{min-height:56px;padding:6px 12px;gap:8px}
 .room-brand{flex:1;min-width:0}.room-brand h1{display:none}
