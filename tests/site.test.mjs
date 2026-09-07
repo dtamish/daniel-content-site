@@ -508,7 +508,8 @@ test('content editors can set category, budget, and timing before approval', () 
   assert.match(repository, /saveConceptEditorialMetadata/);
   assert.match(repository, /set_concept_editorial_metadata/);
   assert.match(repository, /p_category: category/);
-  assert.match(reviewScript, /article\.append\(renderAssessment\(concept\)\)/);
+  assert.match(reviewScript, /const footer = renderAssessment\(concept\)/);
+  assert.match(reviewScript, /article\.append\(footer\)/);
   assert.match(reviewScript, /if \(identity\?\.kind === 'content_editor'\)/);
   assert.match(reviewScript, /category\.name = 'category'/);
   assert.match(reviewScript, /concept\.category = result\.category/);
@@ -540,7 +541,8 @@ test('Pending exposes the same assessment sorting as Approved', () => {
 test('every concept card shows its timing and budget estimate at a glance', () => {
   const reviewScript = readFileSync(join(root, 'src/scripts/review-app.ts'), 'utf8');
   const styles = readFileSync(join(root, 'src/styles/room.css'), 'utf8');
-  assert.match(reviewScript, /article\.append\(renderAssessment\(concept\)\)/);
+  assert.match(reviewScript, /const footer = renderAssessment\(concept\)/);
+  assert.match(reviewScript, /article\.append\(footer\)/);
   assert.match(reviewScript, /assessment-value/);
   assert.match(styles, /assessment-chip\.is-fast/);
   assert.match(styles, /assessment-chip\.is-high/);
@@ -586,7 +588,8 @@ test('every band badge carries the exact money or calendar range from the Bands 
 
   // Grid and list share one card renderer; the reader detail and the editor use the
   // same ranges, so all four surfaces are covered by one source of truth.
-  assert.match(reviewScript, /article\.append\(renderAssessment\(concept\)\)/);
+  assert.match(reviewScript, /const footer = renderAssessment\(concept\)/);
+  assert.match(reviewScript, /article\.append\(footer\)/);
   assert.match(reviewScript, /el\.readerAssessment\.replaceChildren\(chips/);
   assert.match(markup, /data-reader-assessment/);
   assert.match(reviewScript, /strings\.assessment\.speed\[value\]\} · \$\{strings\.assessment\.speedRanges\[value\]/);
