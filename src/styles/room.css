@@ -632,6 +632,12 @@
 .room .card-assessment-footer .assessment-chip:not(.is-category) { border: 0; border-radius: 0; background: transparent; padding: 0; min-height: 0; gap: 0.15rem; }
 .room .card-assessment-footer .assessment-label { font-size: 14px; line-height: 1.35; }
 .room .card-assessment-footer .assessment-value { font-size: 15px; }
+/* Semantic band text only: lighter counterparts of the original green/yellow/red
+   band borders, accessible on the approved neutral #2c2c2c footer. */
+.room .card-assessment-footer { --band-green: #85d6ad; --band-yellow: #f3d576; --band-red: #ff9b9b; }
+.room .card-assessment-footer :is(.is-low, .is-fast) .assessment-value { color: var(--band-green); }
+.room .card-assessment-footer .is-medium .assessment-value { color: var(--band-yellow); }
+.room .card-assessment-footer :is(.is-high, .is-slow) .assessment-value { color: var(--band-red); }
 .room .card-assessment-footer .assessment-range { font-size: 14px; line-height: 1.4; }
 .room .card-assessment-footer .assessment-editor { margin-block-start: 0.25rem; }
 .room .card-assessment-footer .assessment-editor summary { font-size: 14px; }
