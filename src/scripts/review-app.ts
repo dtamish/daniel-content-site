@@ -8,7 +8,8 @@ import {
 import { DEFAULT_LOCALE, STRINGS, direction, isLocale, type Locale, type ReviewerRole } from '../lib/i18n';
 import {
   isSupabaseConfigured, loadConcepts, publishConceptForPending, saveConceptEditorialMetadata, saveReview,
-  type BudgetLevel, type ConceptAssessment, type ConceptCategory, type Identity, type ProductionSpeed,
+  type BannerLayout, type BudgetLevel, type ConceptAssessment, type ConceptCategory, type Identity,
+  type ProductionSpeed,
 } from '../lib/concept-repository';
 import { withBase } from '../lib/urls';
 import { installProductionDiagram } from './production-diagram.mjs';
@@ -24,7 +25,8 @@ type Review = {
 type Concept = {
   id: string; title: string; description: string; priority: number; category: ConceptCategory;
   publicationStatus: 'draft' | 'published';
-  bannerUrl: string; pdfUrl: string; reviews: Review[]; assessment: ConceptAssessment | null;
+  bannerUrl: string; bannerLayout?: BannerLayout;
+  pdfUrl: string; reviews: Review[]; assessment: ConceptAssessment | null;
 };
 type Status = 'pending' | 'approved' | 'rejected';
 
@@ -377,11 +379,12 @@ if (appRoot) {
       const head = create('h2', 'group-head');
       head.append(create('span', 'group-dot'),
                   create('span', 'group-name', strings.categories[category as keyof typeof strings.categories]),
-                  create('b', 'group-count', String(categoryItems.length)));
+                  groupCount(categoryItems.length));
       const row = create('div', 'group-grid');
       section.append(head, row);
       el.grid.append(section);
-      renderCards(categoryItems, row, labels, colour);
+      // The heading above this row already names the category, so the cards do not repeat it.
+      renderCards(categoryItems, row, labels, colour, false);
     }
   }
 
@@ -391,7 +394,7 @@ if (appRoot) {
     const head = create('div', 'editorial-queue-head');
     const title = create('h2', 'group-head');
     title.append(create('span', 'group-dot'), create('span', 'group-name', strings.editorialQueueTitle),
-                 create('b', 'group-count', String(items.length)));
+                 groupCount(items.length));
     head.append(title, create('p', 'editorial-queue-help', strings.editorialQueueHelp));
     const row = create('div', 'group-grid');
     section.append(head, row);
@@ -399,7 +402,17 @@ if (appRoot) {
     renderCards(items, row, labels, '#737982');
   }
 
-  function renderCards(visible: Concept[], target: HTMLElement, labels: Record<string, string>, colour: string) {
+  /**
+   * The badge beside a group name. Left as a bare digit it is read as part of the heading —
+   * "Long film (30 min)1" — so it carries its own label for anyone listening to the page.
+   */
+  function groupCount(total: number) {
+    const badge = create('b', 'group-count', String(total));
+    badge.setAttribute('aria-label', strings.documents(total));
+    return badge;
+  }
+
+  function renderCards(visible: Concept[], target: HTMLElement, labels: Record<string, string>, colour: string, showCategory = true) {
     for (const concept of visible) {
       const status = conceptStatus(concept);
       const editorialDraft = concept.publicationStatus === 'draft';
@@ -407,11 +420,20 @@ if (appRoot) {
       article.style.setProperty('--group', editorialDraft
         ? colour
         : (CATEGORY_COLOURS[conceptCategory(concept) as keyof typeof CATEGORY_COLOURS] ?? colour));
-      const card = create('button', 'card-open');
-      card.type = 'button';
-      card.addEventListener('click', () => openReader(concept));
+      // The whole card stays clickable for a pointer, but the control a keyboard or a
+      // screen reader reaches is the one inside the heading, named by the title alone.
+      const card = create('div', 'card-open');
+      card.addEventListener('click', (event) => {
+        if ((event.target as HTMLElement).closest('button, a, summary, input, select, textarea, label')) return;
+        openReader(concept);
+      });
 
-      const banner = create('span', 'card-banner');
+      const banner = create('div', 'card-banner');
+      // A title-free banner is the card's title band; a legacy banner already carries its
+      // own painted title, so nothing is written over it and the heading stays below.
+      const bannerLayout = concept.bannerUrl ? concept.bannerLayout ?? 'composed' : 'none';
+      const titleOnBanner = bannerLayout === 'artwork' && catalogueView === 'grid';
+      banner.dataset.bannerLayout = bannerLayout;
       if (concept.bannerUrl) {
         const image = document.createElement('img');
         image.src = concept.bannerUrl;
@@ -420,12 +442,24 @@ if (appRoot) {
         image.decoding = 'async';
         banner.append(image);
       }
-      const body = create('span', 'card-body');
-      body.append(create('span', 'card-title', concept.title));
+
+      // One title, one heading, one accessible name. The painted title inside a legacy
+      // banner is decorative (alt=""), so no reader ever hears the title twice.
+      const heading = create('h3', 'card-title');
+      const openTitle = create('button', 'card-open-title', concept.title);
+      openTitle.type = 'button';
+      openTitle.addEventListener('click', () => openReader(concept));
+      heading.append(openTitle);
+
+      const body = create('div', 'card-body');
+      if (titleOnBanner) banner.append(heading);
+      else body.append(heading);
       if (concept.publicationStatus === 'draft') {
         body.append(create('span', 'card-status is-editorial', strings.editorialReviewOnly));
       }
-      body.append(create('span', 'card-category', strings.categories[conceptCategory(concept) as keyof typeof strings.categories]));
+      if (showCategory) {
+        body.append(create('span', 'card-category', strings.categories[conceptCategory(concept) as keyof typeof strings.categories]));
+      }
       body.append(create('span', 'card-summary', summary(concept.description)));
 
       const latest = latestReview(concept.reviews);

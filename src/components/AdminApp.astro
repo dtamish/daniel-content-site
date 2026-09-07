@@ -79,6 +79,40 @@ import { withBase } from '../lib/urls';
         </form>
       </section>
 
+      <section class="banner-studio" data-banner-studio data-wordmark={withBase('brand/sinai-wordmark.png')} aria-labelledby="banner-studio-title">
+        <div>
+          <p class="overline">באנר וכותרת</p>
+          <h2 id="banner-studio-title">סטודיו הבאנרים</h2>
+          <p>הבאנרים שבקטלוג נחתכו מפס הכותרת של מסמך הקונספט, ולכן הכותרת צרובה בתוך התמונה — והכרטיס הציג אותה עוד פעם מתחת. כאן מרכיבים באנר נקי מאותה יצירה, בלי טקסט צרוב, והחדר מצייר עליו את הכותרת כטקסט חי: נקרא בכל רוחב מסך, ניתן לבחירה ולחיפוש, ונשמע פעם אחת בקורא מסך. הבאנר המקורי נשאר בארכיון במקומו, ואפשר לחזור אליו בכל רגע.</p>
+        </div>
+        <form data-banner-form>
+          <div class="field">
+            <label for="banner-concept">קונספט</label>
+            <select id="banner-concept" name="concept" data-banner-concept></select>
+          </div>
+          <p class="banner-current" data-banner-current role="status"></p>
+          <div class="field">
+            <label for="banner-title">כותרת מוצגת</label>
+            <input id="banner-title" name="title" data-banner-title maxlength="140" autocomplete="off" />
+            <small>הכותרת נשמרת יחד עם הבאנר, והיא זו שתופיע עליו.</small>
+          </div>
+          <label class="upload-box" for="banner-source">
+            <span class="upload-icon" aria-hidden="true">▭</span>
+            <span><b>תמונת רקע — בלי כותרת</b><small>PNG, JPEG או WebP · עד 12MB · נחתכת למידות הבאנר המקוריות</small></span>
+            <input id="banner-source" name="source" data-banner-source type="file" accept="image/png,image/jpeg,image/webp" />
+          </label>
+          <div class="banner-preview" data-banner-preview>
+            <p class="banner-preview-empty" data-banner-preview-empty>בוחרים קונספט כדי לראות את הבאנר הנוכחי, ותמונת רקע כדי לקבל תצוגה מקדימה.</p>
+          </div>
+          <div class="banner-actions">
+            <button class="secondary-button" type="button" data-banner-preview-run>תצוגה מקדימה</button>
+            <button class="primary-button" type="submit" data-banner-save disabled>שמירת הבאנר ופרסומו</button>
+            <button class="text-button" type="button" data-banner-restore hidden>חזרה לבאנר המקורי</button>
+          </div>
+          <p class="form-status" data-banner-status aria-live="polite">תצוגה מקדימה נשארת במסך הזה בלבד. שום דבר לא מתפרסם עד לחיצה על שמירה.</p>
+        </form>
+      </section>
+
       <section class="concept-editor" aria-labelledby="editor-title">
         <div class="editor-heading">
           <div><p class="overline">קונספט חדש</p><h2 id="editor-title">פרטי הקונספט</h2></div>

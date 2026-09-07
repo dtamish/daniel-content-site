@@ -1,8 +1,14 @@
 import { demoConceptsByLocale } from '../data/demo-concepts.mjs';
+import { bannerLayoutFromPath } from './banner-artwork.mjs';
 import { getSupabaseClient, isSupabaseConfigured } from './supabase-client';
 import { DEFAULT_LOCALE, STRINGS, type Locale, type ReviewerRole } from './i18n';
 
 export type Identity = { kind: ReviewerRole; name: string };
+/**
+ * 'artwork' is a title-free banner the room paints the live title over; 'composed' is a
+ * legacy band with the title already in the picture, which the room leaves alone.
+ */
+export type BannerLayout = 'artwork' | 'composed';
 export type ProductionSpeed = 'fast' | 'medium' | 'slow';
 export type BudgetLevel = 'low' | 'medium' | 'high';
 export type ConceptCategory = 'FLAGSHIP SERIES' | 'series' | 'film' | 'film-short' | 'film-long' | 'digital' | 'podcast';
@@ -86,7 +92,13 @@ async function signedMediaUrl(bucket: string, path: string | null) {
 export async function loadConcepts(locale: Locale = DEFAULT_LOCALE, identity: Identity | null = null) {
   const client = getSupabaseClient();
   if (!client) return structuredClone(demoConceptsByLocale[locale] ?? demoConceptsByLocale[DEFAULT_LOCALE])
-    .map((concept) => ({ ...concept, publicationStatus: 'published' as const, assessment: null }));
+    .map((concept) => ({
+      ...concept,
+      publicationStatus: 'published' as const,
+      assessment: null,
+      bannerPath: '',
+      bannerLayout: 'composed' as BannerLayout,
+    }));
 
   if (identity) await ensureReviewerSession(identity);
   const { data: sessionData } = await client.auth.getSession();
@@ -129,6 +141,8 @@ export async function loadConcepts(locale: Locale = DEFAULT_LOCALE, identity: Id
     locale: (concept.locale ?? locale) as Locale,
     category: concept.category ?? 'series',
     assessment: normalizeAssessment(concept.concept_assessments),
+    bannerPath: concept.banner_path ?? '',
+    bannerLayout: bannerLayoutFromPath(concept.banner_path) as BannerLayout,
     bannerUrl: await signedMediaUrl('concept-banners', concept.banner_path),
     pdfUrl: await signedMediaUrl('concept-pdfs', concept.pdf_path),
     reviews: (concept.reviews ?? []).map((review) => {

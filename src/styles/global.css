@@ -461,3 +461,43 @@
 @layer utilities {
   .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 }
+
+/* --------------------------------------------------------------------------
+   Banner studio (admin). The preview is deliberately the room's own title band:
+   the same navy, the same scrim, the same overlay geometry as the block marked
+   "The banner is the title" in room.css, so what an editor approves here is what
+   a reviewer sees there. Keep the two in step.
+*/
+.banner-studio { grid-column: 1 / -1; padding: 1.15rem; border: 1px solid var(--ink); border-radius: 15px; background: var(--surface); box-shadow: var(--shadow); }
+.banner-studio h2 { font-family: var(--serif); font-size: 2rem; line-height: 1; }
+.banner-studio > div > p { margin-block-start: 0.5rem; max-width: 70ch; color: var(--muted); }
+.banner-studio form { display: grid; gap: 0.85rem; margin-block-start: 1.1rem; }
+.banner-studio .field small { color: var(--muted); font-size: 0.82rem; }
+.banner-current { margin: 0; color: var(--muted); font-size: 0.85rem; overflow-wrap: anywhere; }
+.banner-preview { display: grid; gap: 0.6rem; padding: 0.75rem; border: 1px solid var(--soft-line); border-radius: 12px; background: var(--paper); }
+.banner-preview-empty, .banner-preview-note { margin: 0; color: var(--muted); font-size: 0.85rem; }
+.banner-preview .card-banner { width: 100%; background: #061845; }
+.banner-preview .card-banner img { display: block; width: 100%; height: auto; }
+.banner-preview .card-banner[data-banner-layout="artwork"] > .card-title {
+  position: relative;
+  margin: -3.2rem 0 0;
+  padding: 3.4rem clamp(0.9rem, 3.4vw, 1.6rem) clamp(0.8rem, 2.6vw, 1.15rem);
+  background: linear-gradient(to top, #061845 0 calc(100% - 3.2rem), rgba(6, 24, 69, 0) 100%);
+  color: #ffffff;
+  font-size: clamp(1.1rem, 4.6vw, 1.5rem);
+  line-height: 1.24;
+  overflow-wrap: anywhere;
+}
+.banner-preview .card-banner[data-banner-layout="artwork"] > .card-title::after {
+  content: "";
+  display: block;
+  width: 3.4rem;
+  height: 2.4px;
+  margin-block-start: 0.7rem;
+  background: #dfb640;
+}
+.banner-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; }
+.banner-actions button { flex: 0 1 auto; min-width: max-content; }
+.secondary-button { min-height: 46px; padding: 0 1rem; border: 1px solid var(--line); border-radius: 9px; background: transparent; color: var(--ink); font-weight: 750; }
+.secondary-button:disabled { opacity: 0.5; cursor: not-allowed; }
+.banner-preview .card-banner[data-banner-layout="artwork"] > .card-title { text-align: start; }

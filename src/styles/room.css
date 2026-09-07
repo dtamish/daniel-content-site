@@ -713,3 +713,69 @@ html[lang="en"] .room :is(.card-summary,.card-status){font-weight:500;font-size:
 .catalogue-view-buttons [data-i18n]{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap}
 .catalogue-view-buttons button>span[aria-hidden]{font-size:21px}
 }
+
+/* ---------------------------------------------------------------------------
+   The banner is the title.
+
+   A banner rasterised from its concept document carries the title inside the
+   picture, and the card printed the same title again underneath: two titles, and
+   the painted one unreadable on a phone and invisible to a screen reader. A
+   title-free banner (data-banner-layout="artwork") is instead the card's title
+   band — the room paints the real title over the picture's own navy scrim, so it
+   wraps, scales with the viewport, can be selected and searched, and is a genuine
+   heading. A legacy banner (data-banner-layout="composed") is untouched and keeps
+   its heading below the picture, so nothing is ever hidden or printed twice.
+
+   The picture itself is never cropped: the title band sits in the scrim at the
+   foot of the artwork and the brand navy continues underneath it for as many
+   lines as a long Hebrew or English title needs. Every line of the title
+   therefore lands on solid #061845 — 17:1 against white.
+*/
+.room .card-open { cursor: pointer; }
+.room .card-title { margin: 0; }
+.room .card-open-title {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-align: start;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.room .card-banner[data-banner-layout="artwork"] { display: block; background: #061845; }
+.room .card-banner[data-banner-layout="artwork"] > .card-title {
+  position: relative;
+  margin-block-start: -3.2rem;
+  padding: 3.4rem clamp(0.9rem, 3.4vw, 1.6rem) clamp(0.8rem, 2.6vw, 1.15rem);
+  background: linear-gradient(to top, #061845 0 calc(100% - 3.2rem), rgba(6, 24, 69, 0) 100%);
+  color: #ffffff;
+  font-size: clamp(1.1rem, 4.6vw, 1.5rem);
+  line-height: 1.24;
+}
+.room .card-banner[data-banner-layout="artwork"] > .card-title .card-open-title { color: #ffffff; }
+/* The gold rule the concept documents close their hero title with. */
+.room .card-banner[data-banner-layout="artwork"] > .card-title::after {
+  content: "";
+  display: block;
+  width: 3.4rem;
+  height: 2.4px;
+  margin-block-start: 0.7rem;
+  background: #dfb640;
+}
+.room .is-editorial-draft .card-banner[data-banner-layout="artwork"] > .card-title { color: #eef1f5; }
+
+/* Comments and Reset are one decision about one concept, so they share one row and
+   wrap only when the two labels genuinely cannot fit beside each other. */
+.room .card-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.room .card-actions button {
+  flex: 1 1 auto;
+  width: auto;
+  min-width: max-content;
+  min-height: 44px;
+  white-space: nowrap;
+}
