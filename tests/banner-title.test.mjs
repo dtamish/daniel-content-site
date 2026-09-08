@@ -129,16 +129,16 @@ test('the studio preview and the room paint the same band', () => {
   }
 });
 
-test('Comments and Reset share one row and wrap only when they cannot fit', () => {
+test('Comments and Reset use equal parallel tracks on desktop and mobile', () => {
   const actions = room.match(/\.room \.card-actions \{[^}]*\}/s)[0];
   const button = room.match(/\.room \.card-actions button \{[^}]*\}/s)[0];
-  assert.match(actions, /display: flex/);
-  assert.match(actions, /flex-wrap: wrap/);
-  assert.match(button, /flex: 1 1 auto/);
-  // max-content is what stops the row from squeezing a label instead of wrapping it.
-  assert.match(button, /min-width: max-content/);
+  assert.match(actions, /display: grid/);
+  assert.match(actions, /grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
+  assert.match(button, /min-width: 0/);
   assert.match(button, /min-height: 44px/);
-  assert.match(button, /width: auto/);
+  assert.match(button, /width: 100%/);
+  assert.match(button, /white-space: normal/);
+  assert.match(room, /\.room \.card-actions button:only-child \{ grid-column: 1 \/ -1; \}/);
   assert.ok(room.indexOf('.room .card-actions button') > room.indexOf('.card-actions { grid-template-columns: 1fr;'),
     'the one-per-row mobile rule must be overridden, not left to win');
 });
