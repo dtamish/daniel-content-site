@@ -7,7 +7,7 @@ import {
 } from '../lib/review-state.mjs';
 import { DEFAULT_LOCALE, STRINGS, direction, isLocale, type Locale, type ReviewerRole } from '../lib/i18n';
 import {
-  isSupabaseConfigured, loadConcepts, publishConceptForPending, saveConceptEditorialMetadata, saveReview,
+  isSupabaseConfigured, loadConcepts, publishConceptForPending, saveConceptEditorialMetadata, saveReview, refreshMediaUrl,
   type BannerLayout, type BudgetLevel, type ConceptAssessment, type ConceptCategory, type Identity,
   type ProductionSpeed,
 } from '../lib/concept-repository';
@@ -26,7 +26,7 @@ type Review = {
 type Concept = {
   id: string; title: string; description: string; priority: number; category: ConceptCategory;
   publicationStatus: 'draft' | 'published';
-  bannerUrl: string; bannerLayout?: BannerLayout;
+  bannerUrl: string; bannerLayout?: BannerLayout; bannerPath?: string; pdfPath?: string;
   pdfUrl: string; reviews: Review[]; assessment: ConceptAssessment | null;
 };
 type Status = 'pending' | 'approved' | 'rejected';
@@ -437,12 +437,24 @@ if (appRoot) {
       const banner = create('div', 'card-banner');
       // A title-free banner is the card's title band; a legacy banner already carries its
       // own painted title, so nothing is written over it and the heading stays below.
-      const bannerLayout = concept.bannerUrl ? concept.bannerLayout ?? 'composed' : 'none';
+      const bannerLayout = concept.bannerUrl || concept.bannerPath ? concept.bannerLayout ?? 'composed' : 'none';
       const titleOnBanner = bannerLayout === 'artwork' && catalogueView === 'grid';
       banner.dataset.bannerLayout = bannerLayout;
-      if (concept.bannerUrl) {
+      if (concept.bannerUrl || concept.bannerPath) {
         const image = document.createElement('img');
-        image.src = concept.bannerUrl;
+        let recovered = false;
+        const recoverBanner = async () => {
+          if (recovered || !concept.bannerPath) return;
+          recovered = true;
+          try {
+            const fresh = await refreshMediaUrl('concept-banners', concept.bannerPath);
+            concept.bannerUrl = fresh;
+            image.src = fresh;
+          } catch (error) { console.warn('Banner could not be refreshed', concept.id, error); }
+        };
+        image.addEventListener('error', () => { void recoverBanner(); });
+        if (concept.bannerUrl) image.src = concept.bannerUrl;
+        else void recoverBanner();
         image.alt = '';
         image.loading = 'lazy';
         image.decoding = 'async';
@@ -955,6 +967,14 @@ if (appRoot) {
     document.body.classList.add('reader-open');
     need<HTMLButtonElement>('[data-close-reader]').focus();
     setReaderState(strings.loadingDocument);
+
+    // Catalogue URLs expire while a tab is left open. Resolve at the point of use,
+    // including when initial catalogue signing failed, without changing access policy.
+    if (concept.pdfPath) {
+      try { concept.pdfUrl = await refreshMediaUrl('concept-pdfs', concept.pdfPath); }
+      catch (error) { console.warn('Document URL could not be refreshed', concept.id, error); }
+      if (active !== concept || el.reader.hidden) return;
+    }
 
     if (!concept.pdfUrl) {
       pdf = null;

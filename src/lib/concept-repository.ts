@@ -1,5 +1,6 @@
 import { demoConceptsByLocale } from '../data/demo-concepts.mjs';
 import { bannerLayoutFromPath } from './banner-artwork.mjs';
+import { createMediaResolver } from './media-resolver.mjs';
 import { getSupabaseClient, isSupabaseConfigured } from './supabase-client';
 import { DEFAULT_LOCALE, STRINGS, type Locale, type ReviewerRole } from './i18n';
 
@@ -77,11 +78,17 @@ function normalizeAssessment(value: ConceptRow['concept_assessments']): ConceptA
   } : null;
 }
 
-async function signedMediaUrl(bucket: string, path: string | null) {
+export const refreshMediaUrl = createMediaResolver(async (bucket: string, path: string) => {
   const client = getSupabaseClient();
   if (!client || !path) return '';
-  const { data } = await client.storage.from(bucket).createSignedUrl(path, 60 * 60);
+  const { data, error } = await client.storage.from(bucket).createSignedUrl(path, 60 * 60);
+  if (error) throw error;
   return data?.signedUrl ?? '';
+});
+
+async function signedMediaUrl(bucket: string, path: string | null) {
+  try { return await refreshMediaUrl(bucket, path); }
+  catch (error) { console.warn('Media URL unavailable; retry on use', bucket, path, error); return ''; }
 }
 
 /**
@@ -142,6 +149,7 @@ export async function loadConcepts(locale: Locale = DEFAULT_LOCALE, identity: Id
     category: concept.category ?? 'series',
     assessment: normalizeAssessment(concept.concept_assessments),
     bannerPath: concept.banner_path ?? '',
+    pdfPath: concept.pdf_path ?? '',
     bannerLayout: bannerLayoutFromPath(concept.banner_path) as BannerLayout,
     bannerUrl: await signedMediaUrl('concept-banners', concept.banner_path),
     pdfUrl: await signedMediaUrl('concept-pdfs', concept.pdf_path),

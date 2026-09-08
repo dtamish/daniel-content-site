@@ -87,7 +87,8 @@ test('a card carries exactly one title, and it is a heading that opens the conce
 });
 
 test('a live title is painted only over a banner that has none', () => {
-  assert.match(cards, /const bannerLayout = concept\.bannerUrl \? concept\.bannerLayout \?\? 'composed' : 'none';/);
+  // A recoverable storage path retains its source layout even if initial signing failed.
+  assert.match(cards, /const bannerLayout = concept\.bannerUrl \|\| concept\.bannerPath \? concept\.bannerLayout \?\? 'composed' : 'none';/);
   assert.match(cards, /const titleOnBanner = bannerLayout === 'artwork' && catalogueView === 'grid';/);
   assert.match(cards, /banner\.dataset\.bannerLayout = bannerLayout;/);
   // The picture stays decorative either way, so a painted title is never announced twice.
