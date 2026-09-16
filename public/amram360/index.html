@@ -3,7 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="robots" content="noindex">
+<meta name="robots" content="noindex, nofollow">
+<meta name="description" content="כלי עבודה לפריוויז 360 של הסרט עמרם ואדיס: מרחבים, סימונים וקי־פריימים בסנכרון עם הפסקול">
 <title>עמרם ואדיס ב־360</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+Hebrew:wght@400;500;600;700&display=swap">
 <style>
@@ -588,9 +589,10 @@ function renderFocus() {
 function vTile(v, opts) {
   opts = opts || {}; const t = document.createElement('button'); t.type = 'button'; t.className = 'tile' + (opts.sm ? ' sm' : '') + (opts.cur ? ' cur' : '') + (opts.on ? ' on' : '');
   const what = v.kind === 'original' ? 'מקורי' : (v.summary || v.prompt || 'נוצר');
-  t.innerHTML = '<img src="' + esc(vUrl(v)) + '" alt="" loading="lazy"><div class="cap"><b>גרסה ' + (v.n || 1) + '</b> · ' + esc(what) + '</div>'; t.title = (v.prompt || v.summary || what) + (v.createdAt ? ' · ' + fmtDate(v.createdAt) : '');
+  t.innerHTML = '<div class="cap"><b>גרסה ' + (v.n || 1) + '</b> · ' + esc(what) + '</div>'; t.prepend(imgEl(vUrl(v))); t.title = (v.prompt || v.summary || what) + (v.createdAt ? ' · ' + fmtDate(v.createdAt) : '');
   if (opts.onClick) t.addEventListener('click', opts.onClick); return t;
 }
+function imgEl(url) { const im = document.createElement('img'); im.alt = ''; im.loading = 'lazy'; im.src = url; return im; }
 function ghostTile(job, sm) { const t = document.createElement('div'); t.className = 'tile ghost' + (sm ? ' sm' : ''); t.innerHTML = '<div class="ph"><span class="spin"></span></div><div class="cap"><b>' + (job.status === 'running' ? 'קלוד עובד…' : 'ממתין לקלוד') + '</b> · ' + esc(job.prompt || 'גרסה חדשה') + '</div>'; t.title = job.prompt || ''; return t; }
 function renderS1() {
   const seq = seqNow(), sf = spaceFrame(seq), list = versionsOf(sf.id), cur = currentVersion(sf), shown = shownVersion();
@@ -689,7 +691,7 @@ function renderS3() {
   const strip = $('s3Strip'); strip.replaceChildren();
   list.forEach((fr, i) => {
     const v = currentVersion(fr), job = activeJob(fr.id); const t = document.createElement('button'); t.type = 'button'; t.className = 'tile kf' + (fr.id === f.id ? ' on' : '');
-    t.innerHTML = (v ? '<img src="' + esc(vUrl(v)) + '" alt="" loading="lazy">' : '<div class="ph">' + (job ? '<span class="spin"></span>' : '◆ אין תמונה') + '</div>') + '<div class="cap"><b>' + (i + 1) + ' · ' + (fr.establishing ? 'המרחב' : esc(fr.t)) + '</b>' + (fr.establishing ? '' : ' · ' + esc(fr.text)) + '</div>' + (baseChanged(fr) ? '<span class="warn" title="הבסיס השתנה מאז">⚠</span>' : '');
+    t.innerHTML = (v ? '' : '<div class="ph">' + (job ? '<span class="spin"></span>' : '◆ אין תמונה') + '</div>') + '<div class="cap"><b>' + (i + 1) + ' · ' + (fr.establishing ? 'המרחב' : esc(fr.t)) + '</b>' + (fr.establishing ? '' : ' · ' + esc(fr.text)) + '</div>' + (baseChanged(fr) ? '<span class="warn" title="הבסיס השתנה מאז">⚠</span>' : ''); if (v) t.prepend(imgEl(vUrl(v)));
     t.title = fr.text || ''; t.addEventListener('click', () => select(fr.id, null)); strip.appendChild(t);
   });
   const add = document.createElement('button'); add.type = 'button'; add.className = 'tile add'; add.innerHTML = '<div class="ph">+ פריים</div><div class="cap">ברגע הנוכחי</div>'; add.addEventListener('click', () => $('kfAdd').click()); strip.appendChild(add);
