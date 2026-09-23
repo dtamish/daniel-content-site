@@ -303,10 +303,12 @@ if (app) {
         pdf: pdf?.size ? pdf : null,
         published: Boolean(data.get('published')),
       });
-      editorStatus.textContent = 'הקונספט נשמר בהצלחה.';
       conceptForm.reset();
       required<HTMLOutputElement>('[data-description-count]').value = '0 / 500';
-      await loadConceptList();
+      const views = await Promise.allSettled([loadConceptList(), loadEditable(), loadBannerConcepts()]);
+      editorStatus.textContent = views.every((view) => view.status === 'fulfilled')
+        ? 'הקונספט נשמר בהצלחה.'
+        : 'הקונספט נשמר, אבל הרשימות לא התעדכנו. רעננו את העמוד כדי לראות אותו.';
     } catch (error) {
       editorStatus.textContent = `השמירה נכשלה: ${error instanceof Error ? error.message : 'שגיאה לא ידועה.'}`;
     }
