@@ -2,10 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, writeFileSync, mkdtempSync, rmSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { buildPlan, validateSourceRelations, DEFAULTS, encode, decode, hashValue, documentFields, docName, PROJECT, BUCKET } from '../tools/firebase-import-core.mjs';
+import { buildPlan, validateSourceRelations, DEFAULTS, decode, hashValue, documentFields, docName, PROJECT } from '../tools/firebase-import-core.mjs';
 import { Client, HttpError } from '../tools/firebase-import-api.mjs';
 import { run as importRun } from '../tools/firebase-import.mjs';
-import { run as verifyRun } from '../tools/firebase-verify.mjs';
+import { run as verifyRun, approvedProfileDelta } from '../tools/firebase-verify.mjs';
 
 let plan;
 test('real private snapshot: every document, link, note and 135 SHA-256s validates without cloud', async () => {
@@ -58,6 +58,20 @@ test('FK, supersession and notes validation rejects structurally plausible alter
 test('unknown flags and missing verifier requirements reject before OAuth or write', async () => {
   await assert.rejects(importRun(['--unknown']), /unknown or repeated/);
   await assert.rejects(verifyRun(['--project',PROJECT]), /requires exact/);
+});
+
+test('profile timestamp delta needs exact source correspondence and verified receipt', async () => {
+  const p=plan || await buildPlan();
+  const original=p.docs.find(d=>d.path.startsWith('legacy_profiles/'));
+  const row={...original.data,updated_at:'2026-09-23T16:00:00.000000+00:00'};
+  const delta={at:'2026-09-23T16:05:00.000Z',rows:[row],fields:[{id:row.id,fields:['updated_at']}]};
+  const receipt={status:'verified',project:PROJECT,path:original.path,sourceCheckedAt:delta.at,expectedHash:hashValue(row)};
+  const approved=approvedProfileDelta(p,delta,receipt);
+  assert.equal(approved.docs.length,249);
+  assert.equal(approved.docs.find(d=>d.path===original.path).data.updated_at,row.updated_at);
+  assert.notEqual(hashValue(approved.docs),p.summary.documents_digest);
+  assert.throws(()=>approvedProfileDelta(p,{...delta,rows:[{...row,display_name:'wrong'}]},receipt),/source correspondence/);
+  assert.throws(()=>approvedProfileDelta(p,delta,{...receipt,status:'planned'}),/delta receipt/);
 });
 
 test('create-only transport reconciles uncertain success, never overwrites mismatches', async () => {

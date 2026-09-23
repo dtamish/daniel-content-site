@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // One-shot, create-only importer. Nothing remote happens without --apply and exact --project.
 import { existsSync } from 'node:fs';
-import { buildPlan, flags, PATH_FLAGS, localPaths, PROJECT, redactFailure, invariant, json, hashValue } from './firebase-import-core.mjs';
+import { buildPlan, flags, PATH_FLAGS, localPaths, PROJECT, redactFailure, invariant, json } from './firebase-import-core.mjs';
 import { Client, firebaseToken, durableJson, reportDigest } from './firebase-import-api.mjs';
 
 const LIB = 'C:/Clawy/Workspace/amram360/data/npm-cache/_npx/ba4f1959e38407b5/node_modules/firebase-tools/lib';

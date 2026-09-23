@@ -163,6 +163,11 @@ export async function buildPlan(paths = DEFAULTS) {
   return { docs, media, summary: { counts: { concepts: 62, reviews: 59, concept_assessments: 17, legacy_profiles: 111, media: media.length, bytes: total, reviews_with_notes: 20 }, documents_digest: hashValue(docs), media_digest: hashValue(media.map(({key,bytes,sha256})=>({key,bytes,sha256}))), media_acl_digest: hashValue(media.map(({key,conceptId})=>({key,conceptId}))) } };
 }
 
-export function redactFailure(e) { return e instanceof Error && /^Validation failed:/.test(e.message) ? e.message : 'Operation failed; inspect credentials, network, or target state without logging sensitive response bodies.'; }
+export function redactFailure(e) {
+  if (e instanceof Error && /^Validation failed:/.test(e.message)) return e.message;
+  if (Number.isInteger(e?.status) && e.status >= 100 && e.status <= 599) return `Remote HTTP status ${e.status}; response body redacted`;
+  if (e?.name === 'TimeoutError' || e?.name === 'TypeError') return `${e.name} during remote request; response body redacted`;
+  return 'Operation failed; inspect credentials, network, or target state without logging sensitive response bodies.';
+}
 export function localPaths(options) { return Object.fromEntries(Object.entries(DEFAULTS).map(([k,v]) => [k, options[`--${k}`] || v])); }
 export const PATH_FLAGS = Object.fromEntries(Object.keys(DEFAULTS).map(k => [`--${k}`, 'value']));

@@ -9,7 +9,7 @@
   "scripts": {
     "dev": "astro dev",
     "check": "astro check",
-    "build:site": "astro build",
+    "build:site": "node tools/validate-firebase-config.mjs && astro build",
     "test": "node --test tests/*.test.mjs",
     "build": "npm run check && npm run build:site && npm test",
     "preview": "astro preview",

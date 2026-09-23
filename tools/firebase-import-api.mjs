@@ -1,7 +1,7 @@
 // REST-only transport. All HTTP errors are deliberately body-redacted.
 import { createRequire } from 'node:module';
 import { createReadStream } from 'node:fs';
-import { writeFile, rename, open, mkdir } from 'node:fs/promises';
+import { rename, open, mkdir } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { createHash } from 'node:crypto';
 import { Readable } from 'node:stream';
@@ -77,16 +77,18 @@ export class Client {
     const mime = media.key.startsWith('concept-pdfs/') ? 'application/pdf' : 'image/png';
     const boundary = `concept-upload-${createHash('sha256').update(media.key).digest('hex').slice(0,24)}`;
     const metadata = { name: media.key, contentType: mime, metadata: media.conceptId ? { conceptId: media.conceptId } : {} };
-    const intro = Buffer.from(`--${boundary}
-\nContent-Type: application/json; charset=UTF-8
-\n
-\n${JSON.stringify(metadata)}
-\n--${boundary}
-\nContent-Type: ${mime}
-\n
-\n`);
-    const end = Buffer.from(`
-\n--${boundary}--`);
+    const crlf = String.fromCharCode(13, 10);
+    const intro = Buffer.from([
+      `--${boundary}`,
+      'Content-Type: application/json; charset=UTF-8',
+      '',
+      JSON.stringify(metadata),
+      `--${boundary}`,
+      `Content-Type: ${mime}`,
+      '',
+      '',
+    ].join(crlf));
+    const end = Buffer.from([crlf, `--${boundary}--`, crlf].join(''));
     const body = Readable.from((async function* () { yield intro; yield* createReadStream(media.file); yield end; })());
     return this.request(url, { method: 'POST', body, headers: { 'Content-Type': `multipart/related; boundary=${boundary}`, 'Content-Length': String(intro.length + media.bytes + end.length) }, timeout: 180000 });
   }
@@ -97,7 +99,7 @@ export class Client {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ writes: [{ update: { name, fields: documentFields(doc.data) }, currentDocument: { exists: false } }] }),
     });
   }
-  async createOnly(item, exists, create) {
+  async createOnly(_item, exists, create) {
     // Every retry first reconciles an uncertain outcome. A mismatch always halts.
     for (let attempt = 0; attempt < 4; attempt++) {
       if (await exists()) return 'reconciled';
