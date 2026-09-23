@@ -1,380 +1,196 @@
-import { demoConceptsByLocale } from '../data/demo-concepts.mjs';
+import { doc, getDoc, getDocs, query, collection, where, runTransaction, setDoc, type DocumentData } from 'firebase/firestore';
+import { getBlob, ref } from 'firebase/storage';
 import { bannerLayoutFromPath } from './banner-artwork.mjs';
 import { createMediaResolver } from './media-resolver.mjs';
-import { getSupabaseClient, isSupabaseConfigured } from './supabase-client';
+import { anonymousUser, firestore, storage, isFirebaseConfigured } from './firebase-client';
 import { DEFAULT_LOCALE, STRINGS, type Locale, type ReviewerRole } from './i18n';
 
 export type Identity = { kind: ReviewerRole; name: string };
-/**
- * 'artwork' is a title-free banner the room paints the live title over; 'composed' is a
- * legacy band with the title already in the picture, which the room leaves alone.
- */
 export type BannerLayout = 'artwork' | 'composed';
 export type ProductionSpeed = 'fast' | 'medium' | 'slow';
 export type BudgetLevel = 'low' | 'medium' | 'high';
 export type ConceptCategory = 'FLAGSHIP SERIES' | 'series' | 'film' | 'film-short' | 'film-long' | 'digital' | 'podcast';
-export type ConceptAssessment = {
-  productionSpeed: ProductionSpeed;
-  budgetLevel: BudgetLevel;
-  updatedAt: string;
+export type ConceptAssessment = { productionSpeed: ProductionSpeed; budgetLevel: BudgetLevel; updatedAt: string };
+type ReviewRow = {
+  id: string; concept_id: string; reviewer_id: string; reviewer_role: string; decision: string;
+  created_at: string; notes?: string | null; affects_decision?: boolean | null;
+  clear_prior_notes?: boolean | null; supersedes_review_id?: string | null;
 };
-
-type DatabaseReview = {
-  id: string;
-  reviewer_id: string;
-  reviewer_role: string;
-  decision: string;
-  created_at: string;
-  notes?: string | null;
-  affects_decision?: boolean | null;
-  clear_prior_notes?: boolean | null;
-  supersedes_review_id?: string | null;
-};
-
+type AssessmentRow = { concept_id?: string; production_speed: ProductionSpeed; budget_level: BudgetLevel; updated_at: string };
 type ConceptRow = {
-  id: string;
-  title: string;
-  description: string;
-  section: string;
-  priority: number;
-  publication_status: 'draft' | 'published';
-  locale?: string | null;
-  category?: string | null;
-  banner_path: string | null;
-  pdf_path: string | null;
-  reviews: DatabaseReview[] | null;
-  concept_assessments: {
-    production_speed: ProductionSpeed;
-    budget_level: BudgetLevel;
-    updated_at: string;
-  } | Array<{
-    production_speed: ProductionSpeed;
-    budget_level: BudgetLevel;
-    updated_at: string;
-  }> | null;
+  id: string; title: string; description: string; section: string; priority: number;
+  publication_status: 'draft' | 'published'; locale?: string | null; category?: string | null;
+  banner_path: string | null; pdf_path: string | null;
+  reviews?: ReviewRow[] | null; concept_assessments?: AssessmentRow | null;
 };
 
-
-function normalizeReviewerRole(value: string | undefined): ReviewerRole {
-  if (value === 'content_editor' || value === 'editor') return 'content_editor';
-  if (value === 'management' || value === 'honi' || value === 'itzik') return 'management';
+function normalizeRole(role: string): ReviewerRole {
+  if (role === 'editor' || role === 'content_editor') return 'content_editor';
+  if (role === 'honi' || role === 'itzik' || role === 'management') return 'management';
   return 'advisor';
 }
 
-function compatibleAuthRole(role: ReviewerRole) {
-  // Legacy aliases keep authentication working before the hosted migration;
-  // the migration normalizes both old and new aliases to the canonical roles.
-  if (role === 'management') return 'honi';
-  if (role === 'content_editor') return 'editor';
-  return 'advisor';
-}
-
-function normalizeAssessment(value: ConceptRow['concept_assessments']): ConceptAssessment | null {
-  const row = Array.isArray(value) ? value[0] : value;
-  return row ? {
-    productionSpeed: row.production_speed,
-    budgetLevel: row.budget_level,
-    updatedAt: row.updated_at,
-  } : null;
-}
-
-export const refreshMediaUrl = createMediaResolver(async (bucket: string, path: string) => {
-  const client = getSupabaseClient();
-  if (!client || !path) return '';
-  const { data, error } = await client.storage.from(bucket).createSignedUrl(path, 60 * 60);
-  if (error) throw error;
-  return data?.signedUrl ?? '';
+// Private Firebase Storage objects are read using the anonymous user's auth token.
+// Object URLs never contain durable download tokens. In-flight requests share a Blob;
+// invalidations are scoped so closing a reader cannot cancel an in-flight banner.
+const media = new Map<string, string>();
+const keyEpoch = new Map<string, number>();
+const bucketEpoch = new Map<string, number>();
+let allEpoch = 0;
+const fetchMedia = createMediaResolver(async (bucket: string, path: string) => {
+  await anonymousUser();
+  return getBlob(ref(storage(), `${bucket}/${path}`));
 });
-
-async function signedMediaUrl(bucket: string, path: string | null) {
-  try { return await refreshMediaUrl(bucket, path); }
-  catch (error) { console.warn('Media URL unavailable; retry on use', bucket, path, error); return ''; }
+export async function refreshMediaUrl(bucket: string, path: string | null | undefined): Promise<string> {
+  if (!path) return '';
+  const key = `${bucket}/${path}`;
+  if (media.has(key)) return media.get(key)!;
+  const generation = [allEpoch, bucketEpoch.get(bucket) ?? 0, keyEpoch.get(key) ?? 0];
+  const blob = await fetchMedia(bucket, path);
+  if (generation[0] !== allEpoch || generation[1] !== (bucketEpoch.get(bucket) ?? 0) || generation[2] !== (keyEpoch.get(key) ?? 0)) return '';
+  const previous = media.get(key);
+  if (previous) return previous;
+  const url = URL.createObjectURL(blob);
+  media.set(key, url);
+  return url;
+}
+export function releaseMediaUrls(bucket?: string) {
+  if (bucket) bucketEpoch.set(bucket, (bucketEpoch.get(bucket) ?? 0) + 1);
+  else allEpoch++;
+  for (const [key, url] of media) {
+    if (!bucket || key.startsWith(`${bucket}/`)) { URL.revokeObjectURL(url); media.delete(key); }
+  }
+}
+export function releaseMediaUrl(bucket: string, path: string | null | undefined) {
+  if (!path) return;
+  const key = `${bucket}/${path}`;
+  keyEpoch.set(key, (keyEpoch.get(key) ?? 0) + 1);
+  const url = media.get(key);
+  if (url) { URL.revokeObjectURL(url); media.delete(key); }
 }
 
-/**
- * Loads the published catalogue for one locale. Locale is part of a concept's logical
- * identity: the same idea has an independent record, PDF and banner per language, and a
- * concept with no approved document in a language simply does not exist there.
- */
+export async function ensureReviewerSession(identity: Identity) {
+  const user = await anonymousUser();
+  const profileRef = doc(firestore(), 'profiles', user.uid);
+  const existing = await getDoc(profileRef);
+  const now = new Date().toISOString();
+  await setDoc(profileRef, {
+    display_name: identity.name, identity_kind: identity.kind,
+    is_editor: identity.kind === 'content_editor', approved: true,
+    created_at: existing.data()?.created_at ?? now, updated_at: now,
+  }, { merge: true });
+  return user;
+}
+
+/** Exactly one concepts query per locale/status; embedded reviews and assessment are
+ * mapped without separate per-card reads or eager Storage downloads. */
 export async function loadConcepts(locale: Locale = DEFAULT_LOCALE, identity: Identity | null = null) {
-  const client = getSupabaseClient();
-  if (!client) return structuredClone(demoConceptsByLocale[locale] ?? demoConceptsByLocale[DEFAULT_LOCALE])
-    .map((concept) => ({
-      ...concept,
-      publicationStatus: 'published' as const,
-      assessment: null,
-      bannerPath: '',
-      bannerLayout: 'composed' as BannerLayout,
-    }));
-
-  if (identity) await ensureReviewerSession(identity);
-  const { data: sessionData } = await client.auth.getSession();
-  const currentUserId = sessionData.session?.user.id ?? null;
-  const REVIEWS = 'reviews(id,reviewer_id,reviewer_role,decision,notes,affects_decision,clear_prior_notes,supersedes_review_id,created_at)';
-  const ASSESSMENT = 'concept_assessments(production_speed,budget_level,updated_at)';
-  const BASE = 'id,title,description,section,priority,publication_status,locale,banner_path,pdf_path';
-
-  const query = (columns: string) => {
-    const catalogue = client
-      .from('concepts')
-      .select(columns)
-      .eq('locale', locale)
-      .order('priority', { ascending: true });
-    return identity?.kind === 'content_editor'
-      ? catalogue.in('publication_status', ['published', 'draft'])
-      : catalogue.eq('publication_status', 'published');
-  };
-
-  // The category column arrives with its own migration. Until that has been applied the
-  // catalogue still loads, ungrouped, rather than the whole room failing to open.
-  let { data, error } = await query(`${BASE},category,${REVIEWS},${ASSESSMENT}`);
-  if (error) {
-    // Assessment support is an additive migration. A stale PostgREST schema cache or
-    // a deploy that lands moments before the migration must not take down the catalogue.
-    ({ data, error } = await query(`${BASE},category,${REVIEWS}`));
-    if (error?.code === '42703') ({ data, error } = await query(`${BASE},${REVIEWS}`));
-  }
-  if (error) throw error;
-  // A select built at runtime cannot be inferred, so the row shape is stated here.
-  const rows = (data ?? []) as unknown as ConceptRow[];
-
-  return Promise.all(rows.map(async (concept) => ({
-    id: concept.id,
-    title: concept.title,
-    description: concept.description,
-    section: concept.section,
-    priority: concept.priority,
-    publicationStatus: concept.publication_status,
-    locale: (concept.locale ?? locale) as Locale,
-    category: concept.category ?? 'series',
-    assessment: normalizeAssessment(concept.concept_assessments),
-    bannerPath: concept.banner_path ?? '',
-    pdfPath: concept.pdf_path ?? '',
-    bannerLayout: bannerLayoutFromPath(concept.banner_path) as BannerLayout,
-    bannerUrl: await signedMediaUrl('concept-banners', concept.banner_path),
-    pdfUrl: await signedMediaUrl('concept-pdfs', concept.pdf_path),
-    reviews: (concept.reviews ?? []).map((review) => {
-      const role = normalizeReviewerRole(review.reviewer_role);
-      return {
-        id: review.id,
-        reviewerId: review.reviewer_id,
-        reviewerName: STRINGS[locale].people[role],
-        reviewerRole: role,
-        isOwn: review.reviewer_id === currentUserId,
-        decision: review.decision,
-        notes: review.notes ?? '',
-        affectsDecision: review.affects_decision !== false,
-        clearPriorNotes: review.clear_prior_notes === true,
-        supersedesReviewId: review.supersedes_review_id ?? null,
-        createdAt: review.created_at,
-      };
-    }),
-  })));
+  const user = identity ? await ensureReviewerSession(identity) : await anonymousUser();
+  const concepts = collection(firestore(), 'concepts');
+  const constraints = identity?.kind === 'content_editor'
+    ? [where('locale', '==', locale)]
+    : [where('locale', '==', locale), where('publication_status', '==', 'published')];
+  const snapshot = await getDocs(query(concepts, ...constraints));
+  return snapshot.docs.map((document) => {
+    const row = document.data() as ConceptRow;
+    const assessment = row.concept_assessments;
+    return {
+      id: document.id,
+      title: row.title, description: row.description, section: row.section,
+      priority: row.priority, publicationStatus: row.publication_status,
+      locale: (row.locale ?? locale) as Locale,
+      category: row.category ?? 'series',
+      assessment: assessment ? {
+        productionSpeed: assessment.production_speed, budgetLevel: assessment.budget_level,
+        updatedAt: assessment.updated_at,
+      } : null,
+      bannerPath: row.banner_path ?? '', pdfPath: row.pdf_path ?? '',
+      bannerLayout: bannerLayoutFromPath(row.banner_path) as BannerLayout,
+      bannerUrl: '', pdfUrl: '', // resolved only as images enter the viewport / document opens
+      reviews: (row.reviews ?? []).map((review) => {
+        const role = normalizeRole(review.reviewer_role);
+        return {
+          id: review.id, reviewerId: review.reviewer_id, reviewerName: STRINGS[locale].people[role],
+          reviewerRole: role, isOwn: review.reviewer_id === user.uid,
+          decision: review.decision, notes: review.notes ?? '',
+          affectsDecision: review.affects_decision !== false,
+          clearPriorNotes: review.clear_prior_notes === true,
+          supersedesReviewId: review.supersedes_review_id ?? null, createdAt: review.created_at,
+        };
+      }),
+    };
+  }).filter((row) => row.publicationStatus === 'published' || identity?.kind === 'content_editor')
+    .sort((a, b) => a.priority - b.priority || a.title.localeCompare(b.title));
 }
 
-async function ensureReviewerSession(identity: Identity) {
-  const client = getSupabaseClient();
-  if (!client) throw new Error('Supabase is not configured.');
-
-  let { data: sessionData } = await client.auth.getSession();
-  if (!sessionData.session) {
-    const { data, error } = await client.auth.signInAnonymously({
-      options: { data: { display_name: identity.name, identity_kind: compatibleAuthRole(identity.kind) } },
-    });
-    if (error) throw error;
-    sessionData = { session: data.session };
-  }
-
-  const userId = sessionData.session?.user.id;
-  if (!userId) throw new Error('Could not establish an authenticated identity for saving.');
-  const { error: roleError } = await client.rpc('set_reviewer_role', {
-    requested_kind: identity.kind,
+export async function saveReview({ conceptId, decision, notes, identity, affectsDecision = true, clearPriorNotes = false, supersedesReviewId = null }: {
+  conceptId: string; decision: string; notes: string; identity: Identity; reviewerId: string;
+  affectsDecision?: boolean; clearPriorNotes?: boolean; supersedesReviewId?: string | null;
+}) {
+  const user = await ensureReviewerSession(identity);
+  const id = crypto.randomUUID();
+  const created_at = new Date().toISOString();
+  const row: ReviewRow = {
+    id, concept_id: conceptId, reviewer_id: user.uid, reviewer_role: identity.kind,
+    decision, notes: notes.trim() || null, affects_decision: affectsDecision,
+    clear_prior_notes: clearPriorNotes, supersedes_review_id: supersedesReviewId, created_at,
+  };
+  const conceptRef = doc(firestore(), 'concepts', conceptId);
+  const reviewRef = doc(firestore(), 'reviews', id);
+  await runTransaction(firestore(), async (tx) => {
+    const snapshot = await tx.get(conceptRef);
+    if (!snapshot.exists()) throw new Error('Concept no longer exists.');
+    const concept = snapshot.data() as ConceptRow;
+    if (concept.publication_status !== 'published' && identity.kind !== 'content_editor') {
+      throw new Error('This concept is not published.');
+    }
+    if (supersedesReviewId && !(concept.reviews ?? []).some((review) => review.id === supersedesReviewId && review.reviewer_id === user.uid)) {
+      throw new Error('Only your own historical review can be amended.');
+    }
+    const next: DocumentData = { reviews: [...(concept.reviews ?? []), row], updated_at: created_at };
+    if (identity.kind === 'content_editor' && affectsDecision && !supersedesReviewId) {
+      next.publication_status = ['priority-approved', 'schedule-approved'].includes(decision) ? 'published' : 'draft';
+    }
+    tx.set(reviewRef, row); // rules permit create only; the same row is embedded atomically
+    tx.update(conceptRef, next);
   });
-  if (roleError) throw roleError;
-  return { client, userId };
+  return { mode: 'firebase' as const, id, reviewerId: user.uid, reviewerRole: identity.kind, createdAt: created_at };
 }
 
-type SupabaseClient = NonNullable<ReturnType<typeof getSupabaseClient>>;
-
-async function restoreConceptPublicationStatus(
-  client: SupabaseClient,
-  conceptId: string,
-  publicationStatus: 'draft' | 'published',
-) {
-  const { error } = await client.from('concepts')
-    .update({ publication_status: publicationStatus })
-    .eq('id', conceptId)
-    .select('id')
-    .single();
-  if (error) throw error;
-}
-
-async function insertReviewRecord(client: SupabaseClient, payload: {
-  conceptId: string; decision: string; notes: string; affectsDecision: boolean;
-  clearPriorNotes: boolean; supersedesReviewId: string | null;
-}) {
-  return client.from('reviews').insert({
-    concept_id: payload.conceptId,
-    decision: payload.decision,
-    notes: payload.notes.trim() || null,
-    affects_decision: payload.affectsDecision,
-    clear_prior_notes: payload.clearPriorNotes,
-    supersedes_review_id: payload.supersedesReviewId,
-  }).select('id,reviewer_id,reviewer_role,decision,notes,affects_decision,clear_prior_notes,supersedes_review_id,created_at').single();
-}
-
-async function saveEditoriallyGatedReview(client: SupabaseClient, payload: {
-  conceptId: string; decision: string; notes: string; affectsDecision: boolean;
-  clearPriorNotes: boolean; supersedesReviewId: string | null;
-}) {
-  const { data: concept, error: readError } = await client.from('concepts')
-    .select('publication_status')
-    .eq('id', payload.conceptId)
-    .single();
-  if (readError) throw readError;
-  const previousStatus = concept.publication_status as 'draft' | 'published';
-  const approvedForWiderReview = ['priority-approved', 'schedule-approved'].includes(payload.decision);
-  const desiredStatus = approvedForWiderReview ? 'published' : 'draft';
-
-  // Existing RLS accepts review rows only for published concepts. The concept is exposed
-  // only for the insert and immediately settles to the editorial decision; failures restore it.
-  try {
-    if (previousStatus !== 'published') {
-      await restoreConceptPublicationStatus(client, payload.conceptId, 'published');
-    }
-    const result = await insertReviewRecord(client, payload);
-    if (desiredStatus !== 'published') {
-      await restoreConceptPublicationStatus(client, payload.conceptId, 'draft');
-    }
-    return result;
-  } catch (error) {
-    await restoreConceptPublicationStatus(client, payload.conceptId, previousStatus);
-    throw error;
-  }
-}
-
-export async function saveReview({ conceptId, decision, notes, identity, reviewerId, affectsDecision = true, clearPriorNotes = false, supersedesReviewId = null }: {
-  conceptId: string;
-  decision: string;
-  notes: string;
-  identity: Identity;
-  reviewerId: string;
-  affectsDecision?: boolean;
-  clearPriorNotes?: boolean;
-  supersedesReviewId?: string | null;
-}) {
-  const client = getSupabaseClient();
-  if (!client) {
-    const key = 'concept-approval:demo-reviews';
-    const existing = JSON.parse(localStorage.getItem(key) ?? '[]');
-    const id = crypto.randomUUID();
-    const createdAt = new Date().toISOString();
-    existing.push({ id, conceptId, decision, notes, identity, reviewerId, affectsDecision, clearPriorNotes, supersedesReviewId, createdAt });
-    localStorage.setItem(key, JSON.stringify(existing));
-    return { mode: 'demo' as const, id, reviewerId, reviewerRole: identity.kind, createdAt };
-  }
-
-  await ensureReviewerSession(identity);
-
-  // The database trigger copies the selected role onto the immutable review row
-  // and always binds reviewer_id to the current anonymous session.
-  const payload = { conceptId, decision, notes, affectsDecision, clearPriorNotes, supersedesReviewId };
-  const { data, error } = identity.kind === 'content_editor' && affectsDecision && !supersedesReviewId
-    ? await saveEditoriallyGatedReview(client, payload)
-    : await insertReviewRecord(client, payload);
-  if (error) throw error;
-  return {
-    mode: 'supabase' as const,
-    id: data.id,
-    reviewerId: data.reviewer_id,
-    reviewerRole: normalizeReviewerRole(data.reviewer_role),
-    createdAt: data.created_at,
-  };
-}
-
-export async function saveConceptAssessment({ conceptId, productionSpeed, budgetLevel, identity }: {
-  conceptId: string;
-  productionSpeed: ProductionSpeed;
-  budgetLevel: BudgetLevel;
-  identity: Identity;
-}): Promise<ConceptAssessment & { mode: 'demo' | 'supabase' }> {
-  const client = getSupabaseClient();
-  if (!client) {
-    return {
-      mode: 'demo', productionSpeed, budgetLevel, updatedAt: new Date().toISOString(),
-    };
-  }
-
-  await ensureReviewerSession(identity);
-  const { data, error } = await client.rpc('set_concept_assessment', {
-    p_concept_id: conceptId,
-    p_production_speed: productionSpeed,
-    p_budget_level: budgetLevel,
-  }).single();
-  if (error) throw error;
-  const row = data as { production_speed: ProductionSpeed; budget_level: BudgetLevel; updated_at: string };
-  return {
-    mode: 'supabase',
-    productionSpeed: row.production_speed,
-    budgetLevel: row.budget_level,
-    updatedAt: row.updated_at,
-  };
-}
-
-export async function publishConceptForPending({ conceptId, identity }: {
-  conceptId: string;
-  identity: Identity;
-}) {
+async function assessmentUpdate(conceptId: string, identity: Identity, productionSpeed: ProductionSpeed, budgetLevel: BudgetLevel, category?: ConceptCategory) {
   if (identity.kind !== 'content_editor') throw new Error('Content editor role required.');
-  const client = getSupabaseClient();
-  if (!client) return { conceptId, publicationStatus: 'published' as const, mode: 'demo' as const };
-
   await ensureReviewerSession(identity);
-  const { data, error } = await client.from('concepts')
-    .update({ publication_status: 'published' })
-    .eq('id', conceptId)
-    .eq('publication_status', 'draft')
-    .select('id,publication_status')
-    .single();
-  if (error) throw error;
-  return { conceptId: data.id, publicationStatus: data.publication_status as 'published', mode: 'remote' as const };
-}
-
-export async function saveConceptEditorialMetadata({ conceptId, category, productionSpeed, budgetLevel, identity }: {
-  conceptId: string;
-  category: ConceptCategory;
-  productionSpeed: ProductionSpeed;
-  budgetLevel: BudgetLevel;
-  identity: Identity;
-}): Promise<ConceptAssessment & { category: ConceptCategory; mode: 'demo' | 'supabase' }> {
-  const client = getSupabaseClient();
-  if (!client) {
-    return {
-      mode: 'demo', category, productionSpeed, budgetLevel, updatedAt: new Date().toISOString(),
+  const now = new Date().toISOString();
+  const conceptRef = doc(firestore(), 'concepts', conceptId);
+  const assessmentRef = doc(firestore(), 'concept_assessments', conceptId);
+  await runTransaction(firestore(), async (tx) => {
+    const [concept, previous] = await Promise.all([tx.get(conceptRef), tx.get(assessmentRef)]);
+    if (!concept.exists()) throw new Error('Concept no longer exists.');
+    const row = {
+      ...previous.data(), concept_id: conceptId,
+      production_speed: productionSpeed, budget_level: budgetLevel, updated_at: now,
     };
-  }
-
-  await ensureReviewerSession(identity);
-  const { data, error } = await client.rpc('set_concept_editorial_metadata', {
-    p_concept_id: conceptId,
-    p_category: category,
-    p_production_speed: productionSpeed,
-    p_budget_level: budgetLevel,
-  }).single();
-  if (error) throw error;
-  const row = data as {
-    category: ConceptCategory;
-    production_speed: ProductionSpeed;
-    budget_level: BudgetLevel;
-    updated_at: string;
-  };
-  return {
-    mode: 'supabase',
-    category: row.category,
-    productionSpeed: row.production_speed,
-    budgetLevel: row.budget_level,
-    updatedAt: row.updated_at,
-  };
+    tx.set(assessmentRef, row);
+    tx.update(conceptRef, { concept_assessments: row, ...(category ? { category } : {}), updated_at: now });
+  });
+  return { mode: 'firebase' as const, productionSpeed, budgetLevel, updatedAt: now };
 }
+export async function saveConceptAssessment({ conceptId, productionSpeed, budgetLevel, identity }: {
+  conceptId: string; productionSpeed: ProductionSpeed; budgetLevel: BudgetLevel; identity: Identity;
+}) { return assessmentUpdate(conceptId, identity, productionSpeed, budgetLevel); }
+export async function saveConceptEditorialMetadata({ conceptId, category, productionSpeed, budgetLevel, identity }: {
+  conceptId: string; category: ConceptCategory; productionSpeed: ProductionSpeed; budgetLevel: BudgetLevel; identity: Identity;
+}) { return { ...await assessmentUpdate(conceptId, identity, productionSpeed, budgetLevel, category), category }; }
 
-export { isSupabaseConfigured };
+export async function publishConceptForPending({ conceptId, identity }: { conceptId: string; identity: Identity }) {
+  if (identity.kind !== 'content_editor') throw new Error('Content editor role required.');
+  await ensureReviewerSession(identity);
+  const reference = doc(firestore(), 'concepts', conceptId);
+  await runTransaction(firestore(), async (tx) => {
+    const concept = await tx.get(reference);
+    if (!concept.exists() || concept.data().publication_status !== 'draft') throw new Error('Draft has changed. Reload the catalogue.');
+    tx.update(reference, { publication_status: 'published', updated_at: new Date().toISOString() });
+  });
+  return { conceptId, publicationStatus: 'published' as const, mode: 'firebase' as const };
+}
+export { isFirebaseConfigured };

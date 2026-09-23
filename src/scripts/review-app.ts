@@ -7,12 +7,12 @@ import {
 } from '../lib/review-state.mjs';
 import { DEFAULT_LOCALE, STRINGS, direction, isLocale, type Locale, type ReviewerRole } from '../lib/i18n';
 import {
-  isSupabaseConfigured, loadConcepts, publishConceptForPending, saveConceptEditorialMetadata, saveReview, refreshMediaUrl,
+  isFirebaseConfigured, loadConcepts, publishConceptForPending, saveConceptEditorialMetadata, saveReview, refreshMediaUrl, releaseMediaUrls, releaseMediaUrl,
   type BannerLayout, type BudgetLevel, type ConceptAssessment, type ConceptCategory, type Identity,
   type ProductionSpeed,
 } from '../lib/concept-repository';
 import { collectPageLinks } from '../lib/pdf-links.mjs';
-import { withBase } from '../lib/urls';
+
 import { installProductionDiagram } from './production-diagram.mjs';
 
 pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
@@ -109,6 +109,18 @@ if (appRoot) {
   let strings = STRINGS[locale];
   let concepts: Concept[] = [];
   const cache = new Map<string, Concept[]>();
+  const bannerObserver = typeof IntersectionObserver === 'undefined' ? null : new IntersectionObserver((entries) => {
+    for (const entry of entries) {
+      if (!entry.isIntersecting) continue;
+      bannerObserver?.unobserve(entry.target);
+      const image = entry.target as HTMLImageElement;
+      const path = image.dataset.storagePath;
+      if (!path) continue;
+      void refreshMediaUrl('concept-banners', path).then((url) => {
+        if (image.isConnected && image.dataset.storagePath === path && url) image.src = url;
+      }).catch((error) => console.warn('Banner unavailable', path, error));
+    }
+  }, { rootMargin: '300px' });
   let catalogueLoadFailed = false;
   let catalogueRetryTimer = 0;
   let catalogueRetryDelay = 5_000;
@@ -239,7 +251,7 @@ if (appRoot) {
     el.prev.setAttribute('aria-label', strings.prevPage);
     el.next.setAttribute('aria-label', strings.nextPage);
     need<HTMLButtonElement>('[data-close-reader]').setAttribute('aria-label', strings.close);
-    el.notice.textContent = isSupabaseConfigured ? strings.liveNotice : strings.demoNotice;
+    el.notice.textContent = isFirebaseConfigured ? strings.liveNotice : strings.loadFailed;
     el.notice.hidden = !el.notice.textContent;
     el.commentsInput.placeholder = strings.commentsPlaceholder;
     el.viewDocument.textContent = strings.viewDocument;
@@ -257,8 +269,9 @@ if (appRoot) {
     if (next === locale) return;
     locale = next;
     localStorage.setItem(LOCALE_KEY, next);
-    // The reader holds a signed URL for the other language's document; drop it on the switch.
+    // Release authenticated object URLs for the old language before loading new media.
     if (!el.reader.hidden) closeReader();
+    releaseMediaUrls();
     applyStrings();
     root.classList.add('is-swapping');
     await loadCatalogue();
@@ -267,36 +280,6 @@ if (appRoot) {
   }
 
   // --------------------------------------------------------------- catalogue
-  function mergeDemoReviews(items: Concept[]) {
-    if (isSupabaseConfigured) return items;
-    try {
-      const stored = JSON.parse(localStorage.getItem('concept-approval:demo-reviews') ?? '[]');
-      for (const record of stored) {
-        const concept = items.find(({ id }) => id === record.conceptId);
-        if (!concept) continue;
-        const roleMap: Record<string, ReviewerRole> = { honi: 'management', itzik: 'management', editor: 'content_editor', advisor: 'advisor' };
-        const role = roleMap[record.identity.kind] ?? record.identity.kind;
-        const decision = record.decision;
-        concept.reviews.push({
-          id: record.id ?? `legacy:${record.createdAt}`,
-          reviewerId: record.reviewerId ?? `legacy:${record.createdAt}`,
-          reviewerName: strings.people[role as ReviewerRole],
-          reviewerRole: role,
-          isOwn: record.reviewerId === localReviewerId,
-          decision,
-          notes: record.notes ?? '',
-          affectsDecision: record.affectsDecision !== false,
-          clearPriorNotes: record.clearPriorNotes === true,
-          supersedesReviewId: record.supersedesReviewId ?? null,
-          createdAt: record.createdAt,
-        });
-      }
-    } catch {
-      // demo history is a convenience, never a source of truth
-    }
-    return items;
-  }
-
   async function loadCatalogue() {
     const requestId = ++catalogueRequestId;
     const cacheKey = `${locale}:${identity?.kind ?? 'none'}`;
@@ -307,12 +290,12 @@ if (appRoot) {
       window.clearTimeout(catalogueRetryTimer);
       catalogueRetryTimer = 0;
       catalogueRetryDelay = 5_000;
-      el.notice.textContent = isSupabaseConfigured ? strings.liveNotice : strings.demoNotice;
+      el.notice.textContent = isFirebaseConfigured ? strings.liveNotice : strings.loadFailed;
       el.notice.hidden = !el.notice.textContent;
       return;
     }
     try {
-      const loaded = mergeDemoReviews((await loadConcepts(locale, identity)) as Concept[]);
+      const loaded = (await loadConcepts(locale, identity)) as Concept[];
       cache.set(cacheKey, loaded);
       if (requestId !== catalogueRequestId) return;
       concepts = loaded;
@@ -320,7 +303,7 @@ if (appRoot) {
       window.clearTimeout(catalogueRetryTimer);
       catalogueRetryTimer = 0;
       catalogueRetryDelay = 5_000;
-      el.notice.textContent = isSupabaseConfigured ? strings.liveNotice : strings.demoNotice;
+      el.notice.textContent = isFirebaseConfigured ? strings.liveNotice : strings.loadFailed;
       el.notice.hidden = !el.notice.textContent;
     } catch (error) {
       if (requestId !== catalogueRequestId) return;
@@ -485,19 +468,11 @@ if (appRoot) {
       banner.dataset.bannerLayout = bannerLayout;
       if (concept.bannerUrl || concept.bannerPath) {
         const image = document.createElement('img');
-        let recovered = false;
-        const recoverBanner = async () => {
-          if (recovered || !concept.bannerPath) return;
-          recovered = true;
-          try {
-            const fresh = await refreshMediaUrl('concept-banners', concept.bannerPath);
-            concept.bannerUrl = fresh;
-            image.src = fresh;
-          } catch (error) { console.warn('Banner could not be refreshed', concept.id, error); }
-        };
-        image.addEventListener('error', () => { void recoverBanner(); });
-        if (concept.bannerUrl) image.src = concept.bannerUrl;
-        else void recoverBanner();
+        if (concept.bannerPath) {
+          image.dataset.storagePath = concept.bannerPath;
+          if (bannerObserver) bannerObserver.observe(image);
+          else void refreshMediaUrl('concept-banners', concept.bannerPath).then((url) => { if (image.isConnected && url) image.src = url; });
+        }
         image.alt = '';
         image.loading = 'lazy';
         image.decoding = 'async';
@@ -1011,12 +986,15 @@ if (appRoot) {
     need<HTMLButtonElement>('[data-close-reader]').focus();
     setReaderState(strings.loadingDocument);
 
-    // Catalogue URLs expire while a tab is left open. Resolve at the point of use,
-    // including when initial catalogue signing failed, without changing access policy.
+    // Private PDF bytes are fetched only when this reader opens.
     if (concept.pdfPath) {
       try { concept.pdfUrl = await refreshMediaUrl('concept-pdfs', concept.pdfPath); }
       catch (error) { console.warn('Document URL could not be refreshed', concept.id, error); }
-      if (active !== concept || el.reader.hidden) return;
+      if (active !== concept || el.reader.hidden) {
+        releaseMediaUrl('concept-pdfs', concept.pdfPath);
+        concept.pdfUrl = '';
+        return;
+      }
     }
 
     if (!concept.pdfUrl) {
@@ -1032,8 +1010,7 @@ if (appRoot) {
     }
 
     try {
-      const url = /^https?:/.test(concept.pdfUrl) ? concept.pdfUrl : withBase(concept.pdfUrl);
-      loadingTask = pdfjs.getDocument({ url });
+      loadingTask = pdfjs.getDocument({ url: concept.pdfUrl });
       pdf = await loadingTask.promise;
       pageCount = pdf.numPages;
       setReaderState('');
@@ -1053,8 +1030,12 @@ if (appRoot) {
     renderToken += 1;
     void cancelRender();
     clearPageLinks();
-    // Never leave a signed document URL alive behind a closed reader.
+    // Revoke the private document object URL when the reader closes.
     void loadingTask?.destroy();
+    if (active?.pdfPath) {
+      releaseMediaUrl('concept-pdfs', active.pdfPath);
+      active.pdfUrl = '';
+    }
     loadingTask = null;
     pdf = null;
     active = null;
@@ -1500,9 +1481,7 @@ if (appRoot) {
         supersedesReviewId: editingReviewId,
         createdAt: result.createdAt,
       });
-      el.commentsStatus.textContent = result.mode === 'demo'
-        ? strings.decisionSavedLocal
-        : (pendingDecision ? strings.decisionSaved : strings.commentSaved);
+      el.commentsStatus.textContent = pendingDecision ? strings.decisionSaved : strings.commentSaved;
       pendingDecision = '';
       editingDecision = '';
       editingReviewId = null;
@@ -1526,6 +1505,7 @@ if (appRoot) {
 
   // ------------------------------------------------------------------- boot
   applyStrings();
+  window.addEventListener('pagehide', () => releaseMediaUrls());
   if (identity) applyIdentity(identity); else el.identityDialog.showModal();
   void loadCatalogue().then(render);
 }

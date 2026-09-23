@@ -1,5 +1,7 @@
 # אתר התוכן של דניאל — תשתית חינמית
 
+> **Firebase client branch:** The concept room browser and `/admin/` now use Firebase anonymous Auth, Firestore and private Storage. See [FIREBASE_CLIENT_SETUP.md](FIREBASE_CLIENT_SETUP.md) for the data contract and setup requirements. The legacy GitHub Pages/Supabase instructions below describe the older production branch and are not deployment instructions for this branch.
+
 אתר תוכן עברי, סטטי ו־CMS-ready. התוכן נשמר בקבצים רגילים ב־GitHub, נערך דרך Pages CMS ונפרס אוטומטית ל־GitHub Pages.
 
 ## מה כבר קיים
