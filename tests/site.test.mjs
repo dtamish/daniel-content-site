@@ -278,13 +278,13 @@ test('the language switch swaps interface, catalogue and document together', () 
   assert.match(reviewScript, /document\.documentElement\.dir = direction\(locale\)/);
   assert.match(reviewScript, /if \(!el\.reader\.hidden\) closeReader\(\);/);
   assert.match(reviewScript, /loadCatalogue\(\)/);
-  assert.match(repository, /\.eq\('locale', locale\)/);
+  assert.match(repository, /where\('locale', '==', locale\)/);
 });
 
 test('a temporarily unavailable catalogue is never cached empty and recovers in the same tab', () => {
   const script = readFileSync(join(root, 'src/scripts/review-app.ts'), 'utf8');
   const load = script.slice(script.indexOf('async function loadCatalogue()'), script.indexOf('function scheduleCatalogueRetry()'));
-  assert.match(load, /const loaded = mergeDemoReviews/);
+  assert.match(load, /const loaded = \(await loadConcepts\(locale, identity\)\)/);
   assert.match(load, /cache\.set\(cacheKey, loaded\)/);
   assert.doesNotMatch(load, /cache\.set\(cacheKey, concepts\)/);
   assert.match(load, /catch \(error\)[\s\S]*catalogueLoadFailed = true;[\s\S]*scheduleCatalogueRetry\(\)/);
@@ -301,47 +301,31 @@ test('admin output makes editor authentication and upload scope explicit', () =>
   assert.match(admin, /500/);
 });
 
-test('admin refreshes its authorization state when the magic-link session arrives', () => {
+test('admin rechecks its Firebase editor profile after explicit role selection', () => {
   const adminScript = readFileSync(join(root, 'src/scripts/admin-app.ts'), 'utf8');
-
-  assert.match(adminScript, /auth\.onAuthStateChange/);
+  assert.match(adminScript, /await ensureReviewerSession\(editorIdentity\);\s*await showCurrentState\(\);/);
+  assert.match(adminScript, /profile\.data\(\)\?\.identity_kind === 'content_editor'/);
 });
 
-test('the deployment remains compatible while hosted editor roles are migrated', () => {
+test('archived role aliases render but new editor profile stays canonical', () => {
   const adminScript = readFileSync(join(root, 'src/scripts/admin-app.ts'), 'utf8');
   const repository = readFileSync(join(root, 'src/lib/concept-repository.ts'), 'utf8');
-
-  assert.match(adminScript, /\['content_editor', 'editor'\]\.includes/);
-  assert.match(repository, /value === 'content_editor' \|\| value === 'editor'/);
-  assert.match(repository, /value === 'management' \|\| value === 'honi' \|\| value === 'itzik'/);
-  assert.match(repository, /role === 'management'.*return 'honi'/s);
-  assert.match(repository, /role === 'content_editor'.*return 'editor'/s);
-  const migration = readFileSync(join(root, 'supabase/migrations/202608160001_roles_and_three_decisions.sql'), 'utf8');
-  assert.match(migration, /identity_kind in \('content_editor', 'editor'\)/);
-  assert.match(migration, /identity_kind in \('management', 'honi', 'itzik'\)/);
+  assert.match(repository, /role === 'editor' \|\| role === 'content_editor'/);
+  assert.match(repository, /role === 'honi' \|\| role === 'itzik' \|\| role === 'management'/);
+  assert.match(adminScript, /kind: 'content_editor' as const/);
+  assert.doesNotMatch(adminScript, /email.*allowlist|signInWithOtp/);
 });
 
-test('review saving stays open to every role while editor upload remains role-scoped', () => {
-  const migration = readFileSync(join(root, 'supabase/migrations/202608160003_review_flow_reset.sql'), 'utf8');
-  const openAccessMigration = readFileSync(join(root, 'supabase/migrations/202608160004_open_reviewer_access.sql'), 'utf8');
+test('review saving is open to all selected roles; uploads require editor profile', () => {
+  const adminScript = readFileSync(join(root, 'src/scripts/admin-app.ts'), 'utf8');
   const repository = readFileSync(join(root, 'src/lib/concept-repository.ts'), 'utf8');
-
-  assert.match(migration, /drop policy if exists "profiles: read self, published reviewers, or editor"/);
-  assert.match(migration, /identity_kind as reviewer_role|new\.reviewer_role/);
-  assert.match(openAccessMigration, /approved\)\s*values[\s\S]*true/);
-  assert.match(openAccessMigration, /update public\.profiles set approved = true/);
-  assert.match(openAccessMigration, /reviews: open link inserts own review/);
-  assert.doesNotMatch(openAccessMigration, /p\.approved = true/);
-  assert.match(openAccessMigration, /is_approved_editor\(\)/);
-  assert.match(openAccessMigration, /set_reviewer_role/);
-  assert.match(migration, /decision in \('priority-approved', 'schedule-approved', 'canceled', 'reset', 'wait'\)/);
-  assert.match(migration, /clear_prior_notes/);
-  assert.match(migration, /affects_decision/);
-  assert.match(migration, /supersedes_review_id/);
-  assert.doesNotMatch(repository, /profiles\(identity_kind\)/);
-  assert.match(repository, /reviewer_role/);
+  assert.match(repository, /reviewer_role: identity\.kind/);
+  assert.match(repository, /tx\.set\(reviewRef, row\)/);
+  assert.match(repository, /is_editor: identity\.kind === 'content_editor'/);
+  assert.match(adminScript, /profile\.data\(\)\?\.approved === true/);
+  assert.match(adminScript, /uploadBytes\(ref\(storage\(\), `concept-banners\/\$\{bannerPath\}`\)/);
+  assert.match(repository, /clear_prior_notes/);
   assert.match(repository, /affects_decision/);
-  assert.match(repository, /rpc\('set_reviewer_role'/);
 });
 
 test('approved concepts expose editorial estimates and sorting without affecting other tabs', () => {
@@ -356,8 +340,9 @@ test('approved concepts expose editorial estimates and sorting without affecting
   assert.match(reviewScript, /identity\?\.kind === 'content_editor'/);
   assert.match(reviewScript, /sortApprovedConcepts/);
   assert.match(repository, /concept_assessments/);
-  assert.match(repository, /query\(`\$\{BASE\},category,\$\{REVIEWS\}`\)/);
-  assert.match(repository, /set_concept_assessment/);
+  assert.match(repository, /const assessment = row\.concept_assessments/);
+  assert.match(repository, /doc\(firestore\(\), 'concept_assessments', conceptId\)/);
+  assert.match(repository, /tx\.update\(conceptRef, \{ concept_assessments: row/);
   assert.match(migration, /production_speed in \('fast', 'medium', 'slow'\)/);
   assert.match(migration, /budget_level in \('low', 'medium', 'high'\)/);
   assert.match(migration, /Content editor role required/);
@@ -501,11 +486,10 @@ test('content editors own a private editorial gate before concepts reach managem
 
   assert.match(repository, /loadConcepts\(locale: Locale = DEFAULT_LOCALE, identity: Identity \| null = null\)/);
   assert.match(repository, /identity\?\.kind === 'content_editor'/);
-  assert.match(repository, /\.in\('publication_status', \['published', 'draft'\]\)/);
+  assert.match(repository, /\? \[where\('locale', '==', locale\)\]/);
   assert.match(repository, /publication_status/);
-  assert.match(repository, /async function saveEditoriallyGatedReview/);
-  assert.match(repository, /const desiredStatus = approvedForWiderReview \? 'published' : 'draft'/);
-  assert.match(repository, /await restoreConceptPublicationStatus/);
+  assert.match(repository, /tx\.set\(reviewRef, row\)/);
+  assert.match(repository, /next\.publication_status = \['priority-approved', 'schedule-approved'\]\.includes\(decision\) \? 'published' : 'draft'/);
   assert.match(reviewScript, /loadConcepts\(locale, identity\)/);
   assert.match(reviewScript, /publicationStatus === 'draft'/);
   assert.match(reviewScript, /strings\.editorialReviewOnly/);
@@ -518,8 +502,8 @@ test('content editors can set category, budget, and timing before approval', () 
   const migration = readFileSync(join(root, 'supabase/migrations/202608200001_preapproval_editorial_metadata.sql'), 'utf8');
 
   assert.match(repository, /saveConceptEditorialMetadata/);
-  assert.match(repository, /set_concept_editorial_metadata/);
-  assert.match(repository, /p_category: category/);
+  assert.match(repository, /assessmentUpdate\(conceptId, identity, productionSpeed, budgetLevel, category\)/);
+  assert.match(repository, /tx\.update\(conceptRef, \{ concept_assessments: row, \.\.\.\(category \? \{ category \}/);
   assert.match(reviewScript, /const footer = renderAssessment\(concept\)/);
   assert.match(reviewScript, /article\.append\(footer\)/);
   assert.match(reviewScript, /if \(identity\?\.kind === 'content_editor'\)/);

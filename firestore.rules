@@ -1,0 +1,83 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function editor() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/profiles/$(request.auth.uid))
+        && get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.identity_kind == 'content_editor'
+        && get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.is_editor == true
+        && get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.approved == true;
+    }
+    function published(conceptId) {
+      return exists(/databases/$(database)/documents/concepts/$(conceptId))
+        && get(/databases/$(database)/documents/concepts/$(conceptId)).data.publication_status == 'published';
+    }
+    function validProfile() {
+      return request.resource.data.keys().hasOnly([
+          'display_name', 'identity_kind', 'is_editor', 'approved', 'created_at', 'updated_at'
+        ])
+        && request.resource.data.display_name is string
+        && request.resource.data.display_name.size() > 0
+        && request.resource.data.display_name.size() <= 80
+        && request.resource.data.identity_kind in ['advisor', 'management', 'content_editor']
+        && request.resource.data.is_editor == (request.resource.data.identity_kind == 'content_editor')
+        && request.resource.data.approved == true;
+    }
+    function validConcept() {
+      return request.resource.data.locale in ['he', 'en']
+        && request.resource.data.publication_status in ['draft', 'published']
+        && request.resource.data.title is string
+        && request.resource.data.title.size() > 0
+        && request.resource.data.title.size() <= 140;
+    }
+    function reviewerAppend() {
+      return signedIn()
+        && resource.data.publication_status == 'published'
+        && resource.data.reviews is list
+        && request.resource.data.reviews is list
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reviews', 'updated_at'])
+        && request.resource.data.reviews.size() == resource.data.reviews.size() + 1
+        && request.resource.data.reviews.hasAll(resource.data.reviews)
+        && request.resource.data.reviews[request.resource.data.reviews.size() - 1].reviewer_id == request.auth.uid;
+    }
+
+    match /profiles/{userId} {
+      allow get: if signedIn() && (request.auth.uid == userId || editor());
+      allow list: if editor();
+      // The owner explicitly retained open-link self-selection of content_editor.
+      allow create: if signedIn() && request.auth.uid == userId && validProfile();
+      allow update: if signedIn() && request.auth.uid == userId && validProfile()
+        && request.resource.data.created_at == resource.data.created_at;
+      allow delete: if false;
+    }
+    match /concepts/{conceptId} {
+      allow get, list: if editor() || resource.data.publication_status == 'published';
+      allow create: if editor() && validConcept();
+      allow update: if (editor() && validConcept()) || reviewerAppend();
+      allow delete: if false;
+    }
+    match /reviews/{reviewId} {
+      allow get, list: if editor() || (signedIn() && published(resource.data.concept_id));
+      allow create: if signedIn()
+        && request.resource.data.reviewer_id == request.auth.uid
+        && request.resource.data.concept_id is string
+        && request.resource.data.decision in ['priority-approved', 'schedule-approved', 'canceled', 'reset']
+        && (request.resource.data.notes == null ||
+            (request.resource.data.notes is string && request.resource.data.notes.size() <= 1000))
+        && (editor() || published(request.resource.data.concept_id));
+      allow update, delete: if false;
+    }
+    match /concept_assessments/{conceptId} {
+      allow get, list: if editor() || (signedIn() && published(conceptId));
+      allow create, update: if editor()
+        && request.resource.data.production_speed in ['fast', 'medium', 'slow']
+        && request.resource.data.budget_level in ['low', 'medium', 'high'];
+      allow delete: if false;
+    }
+    match /legacy_profiles/{legacyId} {
+      allow get, list: if editor();
+      allow write: if false;
+    }
+  }
+}

@@ -1,0 +1,38 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    function signedIn() { return request.auth != null; }
+    function editor() {
+      return signedIn()
+        && firestore.exists(/databases/(default)/documents/profiles/$(request.auth.uid))
+        && firestore.get(/databases/(default)/documents/profiles/$(request.auth.uid)).data.identity_kind == 'content_editor'
+        && firestore.get(/databases/(default)/documents/profiles/$(request.auth.uid)).data.is_editor == true
+        && firestore.get(/databases/(default)/documents/profiles/$(request.auth.uid)).data.approved == true;
+    }
+    function published(conceptId) {
+      return firestore.exists(/databases/(default)/documents/concepts/$(conceptId))
+        && firestore.get(/databases/(default)/documents/concepts/$(conceptId)).data.publication_status == 'published';
+    }
+    function publishedAsset() {
+      return resource.metadata.conceptId is string
+        && published(resource.metadata.conceptId);
+    }
+    function identifiedUpload() {
+      return request.resource.metadata.conceptId is string
+        && request.resource.metadata.conceptId.matches('^[0-9a-f-]{36}$');
+    }
+    match /concept-pdfs/{assetId}/{remaining=**} {
+      allow read: if signedIn() && (editor() || publishedAsset());
+      allow create: if editor() && request.resource.size <= 25 * 1024 * 1024
+        && request.resource.contentType == 'application/pdf' && identifiedUpload();
+      allow update, delete: if false;
+    }
+    match /concept-banners/{assetId}/{remaining=**} {
+      allow read: if signedIn() && (editor() || publishedAsset());
+      allow create: if editor() && request.resource.size <= 5 * 1024 * 1024
+        && request.resource.contentType == 'image/png' && identifiedUpload();
+      allow update, delete: if false;
+    }
+    match /{allPaths=**} { allow read, write: if false; }
+  }
+}

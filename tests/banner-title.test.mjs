@@ -93,7 +93,7 @@ test('a live title is painted only over a banner that has none', () => {
   assert.match(cards, /banner\.dataset\.bannerLayout = bannerLayout;/);
   // The picture stays decorative either way, so a painted title is never announced twice.
   assert.match(cards, /image\.alt = '';/);
-  assert.match(repository, /bannerLayout: bannerLayoutFromPath\(concept\.banner_path\)/);
+  assert.match(repository, /bannerLayout: bannerLayoutFromPath\(row\.banner_path\)/);
 });
 
 test('the card opens from one control that a keyboard and a screen reader can reach', () => {
@@ -147,7 +147,7 @@ test('Comments and Reset use equal parallel tracks on desktop and mobile', () =>
 test('the banner studio is inside the approved-editor workspace and holds no secret', () => {
   const workspace = adminMarkup.slice(adminMarkup.indexOf('data-editor-workspace'), adminMarkup.indexOf('</main>'));
   assert.ok(workspace.includes('data-banner-studio'), 'the studio must sit behind the editor gate');
-  assert.match(admin, /if \(authorized\) await Promise\.all\(\[loadConceptList\(\), loadBannerConcepts\(\)\]\)/);
+  assert.match(admin, /if \(authorized\) await Promise\.all\(\[loadConceptList\(\), loadBannerConcepts\(\), loadEditable\(\)\]\)/);
   assert.doesNotMatch(admin, /service_role|SERVICE_ROLE|sb_secret/);
   assert.doesNotMatch(adminMarkup, /service_role|SERVICE_ROLE|sb_secret/);
 });
@@ -157,15 +157,15 @@ test('a preview is never published, and a painted banner is never reused as a ba
   assert.match(studio, /if \(!concept \|\| !pending\) \{/);
   assert.match(admin, /אי אפשר להרכיב באנר מעל באנר שהכותרת כבר צרובה בתוכו/);
   // The studio uploads in exactly one place, and only from the publish helper.
-  assert.equal(studio.match(/storage\.from\('concept-banners'\)\s*\n?\s*\.upload\(/g).length, 1);
+  assert.equal((studio.match(/uploadBytes\(object, blob,/g) ?? []).length, 1);
 });
 
 test('a title correction never re-encodes the picture', () => {
   const titleOnly = studio.slice(studio.indexOf('async function saveTitleOnly'),
     studio.indexOf("bannerConceptSelect.addEventListener('change'"));
-  assert.match(titleOnly, /\.update\(\{ title \}\)/);
+  assert.match(titleOnly, /updateConceptIfUnchanged\(concept\.id, \{ banner_path: concept\.banner_path, title: concept\.title \}, \{ title \}\)/);
   // It reads the path back to report it, but never writes one, uploads, or recomposes.
-  assert.doesNotMatch(titleOnly, /banner_path:|\.upload\(|compose/);
+  assert.doesNotMatch(titleOnly, /uploadBytes|composeBannerArtwork/);
   assert.match(studio, /pendingSave = changed \? \{ kind: 'title' \} : null;/);
   // Asking to preview a banner that is already title-free says so instead of recomposing.
   assert.match(studio, /הבאנר כבר נקי מטקסט/);
@@ -183,17 +183,16 @@ test('a slow decode cannot land on the concept the editor moved to', () => {
 test('publishing a banner keeps every earlier version recoverable', () => {
   // Immutable: a new folder per save, and an upload that refuses to overwrite.
   assert.match(studio, /const version = crypto\.randomUUID\(\);/);
-  assert.match(studio, /upsert: false/);
+  assert.match(studio, /uploadBytes\(object, blob, \{ contentType: BANNER_ARTWORK\.outputType, customMetadata: \{ conceptId: concept\.id \} \}\)/);
   assert.doesNotMatch(studio, /upsert: true/);
   // The pointer being replaced is recorded before it moves, and only that is offered back.
   assert.match(studio, /rememberReplacedBanner\(concept\.id, concept\.banner_path\)/);
   assert.match(studio, /record\[conceptId\] \?\?= path;/);
   assert.match(studio, /const original = replacedBanners\(\)\[concept\.id\];/);
   // Two editors cannot silently overwrite each other.
-  assert.match(studio, /\.eq\('banner_path', concept\.banner_path\)/);
-  assert.match(studio, /\.eq\('title', concept\.title\)/);
+  assert.match(studio, /updateConceptIfUnchanged\(concept\.id, \{ banner_path: concept\.banner_path, title: concept\.title \}, \{ banner_path: path, title \}\)/);
   // The only object it ever deletes is one it just uploaded and could not point at.
-  assert.equal(studio.match(/\.remove\(\[path\]\)/g).length, 2);
+  assert.equal((studio.match(/deleteObject\(object\)/g) ?? []).length, 1);
 });
 
 test('a category is named once per card, by its group heading or by the card', () => {
