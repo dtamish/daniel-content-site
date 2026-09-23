@@ -281,6 +281,18 @@ test('the language switch swaps interface, catalogue and document together', () 
   assert.match(repository, /\.eq\('locale', locale\)/);
 });
 
+test('a temporarily unavailable catalogue is never cached empty and recovers in the same tab', () => {
+  const script = readFileSync(join(root, 'src/scripts/review-app.ts'), 'utf8');
+  const load = script.slice(script.indexOf('async function loadCatalogue()'), script.indexOf('function scheduleCatalogueRetry()'));
+  assert.match(load, /const loaded = mergeDemoReviews/);
+  assert.match(load, /cache\.set\(cacheKey, loaded\)/);
+  assert.doesNotMatch(load, /cache\.set\(cacheKey, concepts\)/);
+  assert.match(load, /catch \(error\)[\s\S]*catalogueLoadFailed = true;[\s\S]*scheduleCatalogueRetry\(\)/);
+  assert.match(script, /window\.addEventListener\('online', \(\) => void retryCatalogue\(\)\)/);
+  assert.match(script, /document\.addEventListener\('visibilitychange'/);
+  assert.match(script, /catalogueRetryDelay = Math\.min\(catalogueRetryDelay \* 2, 60_000\)/);
+});
+
 test('admin output makes editor authentication and upload scope explicit', () => {
   const admin = readFileSync(join(dist, 'admin/index.html'), 'utf8');
   assert.match(admin, /קישור כניסה|magic.*link/i);

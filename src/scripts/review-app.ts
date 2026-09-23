@@ -109,6 +109,11 @@ if (appRoot) {
   let strings = STRINGS[locale];
   let concepts: Concept[] = [];
   const cache = new Map<string, Concept[]>();
+  let catalogueLoadFailed = false;
+  let catalogueRetryTimer = 0;
+  let catalogueRetryDelay = 5_000;
+  let catalogueRetrying = false;
+  let catalogueRequestId = 0;
   let tab: Status = 'pending';
   let catalogueView: 'grid' | 'list' = 'grid';
   let approvedSort: 'default' | 'speed' | 'budget' | 'viability' = 'default';
@@ -293,21 +298,59 @@ if (appRoot) {
   }
 
   async function loadCatalogue() {
+    const requestId = ++catalogueRequestId;
     const cacheKey = `${locale}:${identity?.kind ?? 'none'}`;
     const cached = cache.get(cacheKey);
     if (cached) {
       concepts = cached;
+      catalogueLoadFailed = false;
+      window.clearTimeout(catalogueRetryTimer);
+      catalogueRetryTimer = 0;
+      catalogueRetryDelay = 5_000;
+      el.notice.textContent = isSupabaseConfigured ? strings.liveNotice : strings.demoNotice;
+      el.notice.hidden = !el.notice.textContent;
       return;
     }
     try {
-      concepts = mergeDemoReviews((await loadConcepts(locale, identity)) as Concept[]);
+      const loaded = mergeDemoReviews((await loadConcepts(locale, identity)) as Concept[]);
+      cache.set(cacheKey, loaded);
+      if (requestId !== catalogueRequestId) return;
+      concepts = loaded;
+      catalogueLoadFailed = false;
+      window.clearTimeout(catalogueRetryTimer);
+      catalogueRetryTimer = 0;
+      catalogueRetryDelay = 5_000;
+      el.notice.textContent = isSupabaseConfigured ? strings.liveNotice : strings.demoNotice;
+      el.notice.hidden = !el.notice.textContent;
     } catch (error) {
+      if (requestId !== catalogueRequestId) return;
       console.error(error);
       concepts = [];
+      catalogueLoadFailed = true;
       el.notice.textContent = strings.loadFailed;
       el.notice.hidden = false;
+      scheduleCatalogueRetry();
     }
-    cache.set(cacheKey, concepts);
+  }
+
+  function scheduleCatalogueRetry() {
+    if (catalogueRetryTimer) return;
+    catalogueRetryTimer = window.setTimeout(() => {
+      catalogueRetryTimer = 0;
+      if (!document.hidden) void retryCatalogue();
+    }, catalogueRetryDelay);
+    catalogueRetryDelay = Math.min(catalogueRetryDelay * 2, 60_000);
+  }
+
+  async function retryCatalogue() {
+    if (!catalogueLoadFailed || catalogueRetrying || document.hidden) return;
+    catalogueRetrying = true;
+    try {
+      await loadCatalogue();
+      render();
+    } finally {
+      catalogueRetrying = false;
+    }
   }
 
   // ------------------------------------------------------------------ render
@@ -1248,6 +1291,11 @@ if (appRoot) {
   });
 
   el.localeToggle.addEventListener('click', () => void setLocale(locale === 'he' ? 'en' : 'he'));
+  window.addEventListener('online', () => void retryCatalogue());
+  window.addEventListener('focus', () => void retryCatalogue());
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) void retryCatalogue();
+  });
   need<HTMLButtonElement>('[data-change-identity]').addEventListener('click', () => el.identityDialog.showModal());
   need<HTMLButtonElement>('[data-close-reader]').addEventListener('click', closeReader);
   el.openComments.addEventListener('click', () => switchReaderView('comments'));
