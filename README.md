@@ -1,6 +1,12 @@
-# אתר התוכן של דניאל — תשתית חינמית
+# חדר הקונספטים של סיני
 
-> **Firebase client branch:** The concept room browser and `/admin/` now use Firebase anonymous Auth, Firestore and private Storage. See [FIREBASE_CLIENT_SETUP.md](FIREBASE_CLIENT_SETUP.md) for the data contract and setup requirements. The legacy GitHub Pages/Supabase instructions below describe the older production branch and are not deployment instructions for this branch.
+הכתובת הקבועה היא [dtamish.github.io/daniel-content-site](https://dtamish.github.io/daniel-content-site/). GitHub Pages מגיש את הממשק, ו־Firebase (`sinai-concept-room-dd26`) מחזיק Auth אנונימי, Firestore ומדיה פרטית ב־Storage. [כתובת Firebase הישירה](https://sinai-concept-room-dd26.web.app/) מגישה את אותו ממשק מול **אותו מסד** — חלופה אם Pages אינו זמין, לא חדר נוסף עם נתונים נפרדים. פרטי המימוש וההרשאות: [FIREBASE_CLIENT_SETUP.md](FIREBASE_CLIENT_SETUP.md).
+
+ב־GitHub Actions נדרשים חמשת משתני `PUBLIC_FIREBASE_*` הציבוריים. `npm run build` מסרב להפיק אתר עם תצורה חסרה או מצונזרת. הגיבוי הפרטי, קבלות הייבוא, מידע המשתמשים וקובצי המדיה אינם במאגר. ייבוא המקור אומת בקריאה חוזרת של 249 מסמכים ו־135 קבצים (104,901,305 בתים), כולל SHA‑256; ראה [כלי הייבוא והאימות](tools/FIREBASE_IMPORT.md). אין להפעיל את כלי Supabase הישן `tools/concept-admin.mjs` על הנתונים החדשים.
+
+**חשוב:** הפרויקט ב־Firebase הוא Blaze (חיוב לפי שימוש), לא שירות חינמי מובטח; מצב התראת התקציב טרם אומת. בעל קישור יכול לבחור תפקיד „עורך תוכן” כפי שהיה בחדר המקורי — זו גישה פתוחה לעריכה, לא הזמנה אישית. לפני החלפה או חזרה לגרסה ישנה משווים מחדש שינויים בשני מקורות הנתונים, כדי לא לאבד החלטות או הערות. התחום הקודם נשמר בקוד ובגיבוי לצורך חזרה מבוקרת.
+
+## הערות היסטוריות על האתר הסטטי המקורי
 
 אתר תוכן עברי, סטטי ו־CMS-ready. התוכן נשמר בקבצים רגילים ב־GitHub, נערך דרך Pages CMS ונפרס אוטומטית ל־GitHub Pages.
 
@@ -22,7 +28,7 @@
 3. **Astro** — בונה את הקבצים לעמודים סטטיים.
 4. **GitHub Actions + Pages** — מריצים את הבדיקות ומפרסמים את התוצר.
 
-המסלול הזה אינו דורש תשלום חודשי. ב־GitHub Free, GitHub Pages זמין למאגר ציבורי. Pages CMS מציג את עצמו כחינמי וקוד פתוח.
+אירוח הקבצים הסטטיים ב־GitHub Pages היה חינמי; המסלול הנוכחי של Firebase הוא שירות נפרד בתמחור לפי שימוש.
 
 מקורות רשמיים:
 

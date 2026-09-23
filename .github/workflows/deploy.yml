@@ -17,8 +17,13 @@ jobs:
     permissions:
       contents: read
     env:
-      PUBLIC_SUPABASE_URL: ${{ secrets.PUBLIC_SUPABASE_URL }}
-      PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.PUBLIC_SUPABASE_ANON_KEY }}
+      BASE_PATH: /daniel-content-site
+      SITE_URL: https://dtamish.github.io
+      PUBLIC_FIREBASE_PROJECT_ID: ${{ vars.PUBLIC_FIREBASE_PROJECT_ID }}
+      PUBLIC_FIREBASE_AUTH_DOMAIN: ${{ vars.PUBLIC_FIREBASE_AUTH_DOMAIN }}
+      PUBLIC_FIREBASE_API_KEY: ${{ vars.PUBLIC_FIREBASE_API_KEY }}
+      PUBLIC_FIREBASE_STORAGE_BUCKET: ${{ vars.PUBLIC_FIREBASE_STORAGE_BUCKET }}
+      PUBLIC_FIREBASE_APP_ID: ${{ vars.PUBLIC_FIREBASE_APP_ID }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository

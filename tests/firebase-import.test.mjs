@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, writeFileSync, mkdtempSync, rmSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdtempSync, rmSync, existsSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { resolve } from 'node:path';
 import { buildPlan, validateSourceRelations, DEFAULTS, decode, hashValue, documentFields, docName, PROJECT } from '../tools/firebase-import-core.mjs';
 import { Client, HttpError } from '../tools/firebase-import-api.mjs';
@@ -8,7 +9,8 @@ import { run as importRun } from '../tools/firebase-import.mjs';
 import { run as verifyRun, approvedProfileDelta } from '../tools/firebase-verify.mjs';
 
 let plan;
-test('real private snapshot: every document, link, note and 135 SHA-256s validates without cloud', async () => {
+const hasPrivateSnapshot=process.env.CI !== 'true' && existsSync(DEFAULTS.source);
+test('real private snapshot: every document, link, note and 135 SHA-256s validates without cloud', {skip:!hasPrivateSnapshot}, async () => {
   plan = await buildPlan();
   assert.deepEqual(plan.summary.counts, { concepts: 62, reviews: 59, concept_assessments: 17, legacy_profiles: 111, media: 135, bytes: 104901305, reviews_with_notes: 20 });
   assert.equal(plan.docs.length, 249);
@@ -20,7 +22,7 @@ test('real private snapshot: every document, link, note and 135 SHA-256s validat
   assert.equal(dry.remote_writes, 0); assert.equal(dry.documents_digest, plan.summary.documents_digest);
 });
 
-test('reject modified source/notes, orphaned reviews, modified counts and bad media receipts', async () => {
+test('reject modified source/notes, orphaned reviews, modified counts and bad media receipts', {skip:!hasPrivateSnapshot}, async () => {
   const temp = mkdtempSync(resolve('tests', '.firebase-import-test-'));
   try {
     const source = JSON.parse(readFileSync(DEFAULTS.source));
@@ -40,7 +42,7 @@ test('reject modified source/notes, orphaned reviews, modified counts and bad me
   } finally { rmSync(temp,{recursive:true,force:true}); }
 });
 
-test('FK, supersession and notes validation rejects structurally plausible altered rows', () => {
+test('FK, supersession and notes validation rejects structurally plausible altered rows', {skip:!hasPrivateSnapshot}, () => {
   const source=JSON.parse(readFileSync(DEFAULTS.source));
   const clone=()=>structuredClone(source);
   const orphan=clone(); orphan.reviews[0].reviewer_id='00000000-0000-0000-0000-000000000000';
@@ -61,13 +63,13 @@ test('unknown flags and missing verifier requirements reject before OAuth or wri
 });
 
 test('profile timestamp delta needs exact source correspondence and verified receipt', async () => {
-  const p=plan || await buildPlan();
-  const original=p.docs.find(d=>d.path.startsWith('legacy_profiles/'));
+  const original={path:'legacy_profiles/00000000-0000-0000-0000-000000000001',data:{id:'00000000-0000-0000-0000-000000000001',display_name:'QA person',updated_at:'2026-09-01T00:00:00+00:00'}};
+  const p={docs:[original],summary:{documents_digest:hashValue([original])}};
   const row={...original.data,updated_at:'2026-09-23T16:00:00.000000+00:00'};
   const delta={at:'2026-09-23T16:05:00.000Z',rows:[row],fields:[{id:row.id,fields:['updated_at']}]};
   const receipt={status:'verified',project:PROJECT,path:original.path,sourceCheckedAt:delta.at,expectedHash:hashValue(row)};
   const approved=approvedProfileDelta(p,delta,receipt);
-  assert.equal(approved.docs.length,249);
+  assert.equal(approved.docs.length,1);
   assert.equal(approved.docs.find(d=>d.path===original.path).data.updated_at,row.updated_at);
   assert.notEqual(hashValue(approved.docs),p.summary.documents_digest);
   assert.throws(()=>approvedProfileDelta(p,{...delta,rows:[{...row,display_name:'wrong'}]},receipt),/source correspondence/);
@@ -94,21 +96,25 @@ test('Firestore commit uses exists:false and GCS upload uses generationMatch=0',
   assert.equal(payload.writes[0].update.name,docName(PROJECT,'reviews/abc'));
   assert.equal(payload.writes[0].update.fields.created_at.stringValue,'2026-01-01T00:00:00.000001+00:00');
   assert.equal(payload.writes[0].update.fields.n.integerValue,'4');
-  await client.putObject(plan.media[0]);
+  const temp=mkdtempSync(resolve('tests','.firebase-import-test-'));
+  const file=resolve(temp,'asset.png'),bytes=Buffer.from('synthetic png upload fixture');writeFileSync(file,bytes);
+  const media={key:'concept-banners/00000000-0000-0000-0000-000000000001/banner.png',conceptId:'00000000-0000-0000-0000-000000000001',file,bytes:bytes.length};
+  try { await client.putObject(media);
   assert.match(calls[1].url,/ifGenerationMatch=0/);
   assert.match(calls[1].url,/uploadType=multipart/);
   const parts=[];
   for await (const chunk of calls[1].opts.body) parts.push(chunk);
   const multipart=Buffer.concat(parts);
   assert.equal(calls[1].opts.headers['Content-Length'],String(multipart.length));
-  assert.ok(multipart.includes(Buffer.from(plan.media[0].key)));
-  if (plan.media[0].conceptId) assert.ok(multipart.includes(Buffer.from(`"conceptId":"${plan.media[0].conceptId}"`)));
-  assert.ok(multipart.includes(readFileSync(plan.media[0].file)));
+  assert.ok(multipart.includes(Buffer.from(media.key)));
+  assert.ok(multipart.includes(Buffer.from(`"conceptId":"${media.conceptId}"`)));
+  assert.ok(multipart.includes(bytes));
+  } finally {rmSync(temp,{recursive:true,force:true});}
 });
 
 test('GCS downloader streams bytes and SHA-256; HTTP error hides response body', async () => {
-  const media=plan.media[0];
-  const bytes=readFileSync(media.file);
+  const bytes=Buffer.from('synthetic downloaded bytes');
+  const media={key:'concept-banners/qa/banner.png',bytes:bytes.length,sha256:createHash('sha256').update(bytes).digest('hex')};
   let requests=0;
   const client=new Client('synthetic-token',async(_url,opts)=>{requests++; assert.equal(opts.method,'GET');return new Response(bytes,{status:200});});
   assert.deepEqual(await client.objectHash(media.key),{bytes:media.bytes,sha256:media.sha256});
@@ -117,7 +123,7 @@ test('GCS downloader streams bytes and SHA-256; HTTP error hides response body',
   await assert.rejects(denied.objectHash(media.key), e=>e instanceof HttpError && e.status===403 && !e.message.includes('secret'));
 });
 
-test('verification reads every target with no cloud writes and writes bounded report', async () => {
+test('verification reads every target with no cloud writes and writes bounded report', {skip:!hasPrivateSnapshot}, async () => {
   const temp=mkdtempSync(resolve('tests','.firebase-import-test-')); const report=resolve(temp,'report.json');
   let gets=0,downloads=0,lists=0;
   const fake={
