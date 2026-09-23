@@ -5,7 +5,7 @@ import { withBase } from '../lib/urls';
 <div class="admin-app" data-admin-app>
   <header class="admin-header">
     <a class="back-button" href={withBase('')}><span aria-hidden="true">→</span> חזרה לסקירה</a>
-    <span class="admin-lock">ניהול מאובטח</span>
+    <span class="admin-lock">ניהול קונספטים</span>
   </header>
 
   <main id="main-content" class="admin-main">
@@ -18,24 +18,19 @@ import { withBase } from '../lib/urls';
     <section class="configuration-panel" data-configuration-panel hidden aria-labelledby="configuration-title">
       <span class="status-icon" aria-hidden="true">!</span>
       <div>
-        <h2 id="configuration-title">העלאת מסמכים תיפתח אחרי חיבור אחד</h2>
-        <p>המערכת עדיין במצב הדגמה, ולכן אין כפתורי העלאה פעילים. מחברים פעם אחת פרויקט Supabase מאובטח; אחר כך חוזרים לכאן ומעלים PDF, באנר ופרטים בלי הגדרות נוספות.</p>
-        <a class="setup-link" href="https://supabase.com/dashboard/projects" target="_blank" rel="noreferrer">פתיחת פרויקט Supabase <span aria-hidden="true">↗</span></a>
+        <h2 id="configuration-title">חיבור Firebase חסר</h2>
+        <p>יש להגדיר את משתני PUBLIC_FIREBASE_* לפני פרסום האתר. לא ניתן לשמור או להציג קונספטים ללא החיבור.</p>
       </div>
     </section>
 
     <section class="auth-panel" data-auth-panel aria-labelledby="auth-title">
       <div>
         <p class="overline">כניסה לעורכים</p>
-        <h2 id="auth-title">קישור כניסה חד־פעמי</h2>
-        <p>בחירת “עורך תוכן” במסך הראשי אינה מעניקה הרשאה. רק פרופיל עורך מאושר יכול להיכנס לכאן.</p>
+        <h2 id="auth-title">כניסה כעורך תוכן</h2>
+        <p>כמו בחדר הקונספטים, כל מי שמחזיק בקישור יכול לבחור תפקיד עורך תוכן. הכניסה יוצרת פרופיל אנונימי עם הרשאת עריכה; אין רשימת אימיילים.</p>
       </div>
       <form data-magic-link-form>
-        <div class="field">
-          <label for="editor-email">כתובת אימייל</label>
-          <input id="editor-email" name="email" type="email" autocomplete="email" required placeholder="editor@example.com" />
-        </div>
-        <button class="primary-button" type="submit">שליחת קישור כניסה</button>
+        <button class="primary-button" type="submit">כניסה לעריכה</button>
         <p class="form-status" data-auth-status aria-live="polite"></p>
       </form>
     </section>
@@ -43,8 +38,8 @@ import { withBase } from '../lib/urls';
     <section class="approval-panel" data-approval-panel hidden aria-labelledby="approval-title">
       <span class="status-icon" aria-hidden="true">⌛</span>
       <div>
-        <h2 id="approval-title">החשבון מחובר, אך עדיין לא אושר כעורך</h2>
-        <p>יש לאשר את הפרופיל לפי ההוראות ב־SUPABASE_SETUP.md. בחירת תפקיד באפליקציה אינה משנה הרשאות.</p>
+        <h2 id="approval-title">אין הרשאת עריכה</h2>
+        <p>בחרו בתפקיד עורך תוכן כדי לפתוח את סביבת העריכה.</p>
         <button class="text-button" type="button" data-sign-out>יציאה מהחשבון</button>
       </div>
     </section>
@@ -168,6 +163,28 @@ import { withBase } from '../lib/urls';
         </form>
       </section>
 
+      <section class="concept-editor" aria-labelledby="edit-title">
+        <div class="editor-heading"><div><p class="overline">עריכת קונספט קיים</p><h2 id="edit-title">פרטים ומדיה</h2></div></div>
+        <form data-edit-form>
+          <div class="field"><label for="edit-concept">קונספט</label><select id="edit-concept" name="concept" data-edit-concept required></select></div>
+          <div class="field"><label for="edit-title-input">כותרת</label><input id="edit-title-input" name="title" required maxlength="140" /></div>
+          <div class="field"><label for="edit-description">תיאור</label><textarea id="edit-description" name="description" required maxlength="500" rows="5"></textarea></div>
+          <div class="field-grid">
+            <div class="field"><label for="edit-section">מיקום</label><select id="edit-section" name="section"><option value="queue">בתור</option><option value="library">בספרייה</option></select></div>
+            <div class="field"><label for="edit-locale">שפה</label><select id="edit-locale" name="locale"><option value="he">עברית</option><option value="en">English</option></select></div>
+            <div class="field"><label for="edit-priority">סדר</label><input id="edit-priority" name="priority" type="number" min="0" max="9999" required /></div>
+            <div class="field"><label for="edit-category">סוג</label><select id="edit-category" name="category"><option value="series">סדרה</option><option value="FLAGSHIP SERIES">סדרת דגל</option><option value="film">סרט</option><option value="film-short">סרט קצר</option><option value="film-long">סרט ארוך</option><option value="digital">דיגיטל</option><option value="podcast">פודקאסט</option></select></div>
+            <div class="field"><label for="edit-status">מצב פרסום</label><select id="edit-status" name="publication_status"><option value="draft">טיוטה</option><option value="published">פורסם</option></select></div>
+          </div>
+          <div class="upload-grid">
+            <label class="upload-box" for="edit-banner"><span>באנר חלופי · PNG עד 5MB</span><input id="edit-banner" name="banner" type="file" accept="image/png" /></label>
+            <label class="upload-box" for="edit-pdf"><span>מסמך חלופי · PDF עד 25MB</span><input id="edit-pdf" name="pdf" type="file" accept="application/pdf" /></label>
+          </div>
+          <p>קבצים חלופיים נשמרים בנתיבי גרסה חדשים; הקבצים הקודמים אינם נמחקים.</p>
+          <button class="primary-button" type="submit">שמירת שינויים</button>
+          <p class="form-status" data-edit-status aria-live="polite"></p>
+        </form>
+      </section>
       <aside class="recent-concepts" aria-labelledby="recent-title">
         <div><p class="overline">תמונה כללית</p><h2 id="recent-title">קונספטים אחרונים</h2></div>
         <div data-admin-concept-list></div>

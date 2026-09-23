@@ -1,8 +1,10 @@
-import type { Session } from '@supabase/supabase-js';
-import { getSupabaseClient, isSupabaseConfigured } from '../lib/supabase-client';
+import { collection, doc, getDoc, getDocs, query, runTransaction, setDoc, updateDoc, where } from 'firebase/firestore';
+import { deleteObject, ref, uploadBytes } from 'firebase/storage';
+import { anonymousUser, firestore, storage, isFirebaseConfigured } from '../lib/firebase-client';
+import { ensureReviewerSession, refreshMediaUrl, releaseMediaUrls } from '../lib/concept-repository';
 import {
-  BANNER_ARTWORK, CHECK_VIOLATION, assertBannerSource, bannerLayoutFromPath,
-  composeBannerArtwork, constrainedBannerPathFor, versionedArtworkBannerPath,
+  BANNER_ARTWORK, assertBannerSource, bannerLayoutFromPath,
+  composeBannerArtwork, versionedArtworkBannerPath,
 } from '../lib/banner-artwork.mjs';
 
 const app = document.querySelector<HTMLElement>('[data-admin-app]');
@@ -20,48 +22,130 @@ if (app) {
   const editorStatus = required<HTMLElement>('[data-editor-status]');
   const conceptForm = required<HTMLFormElement>('[data-concept-form]');
   const description = required<HTMLTextAreaElement>('#concept-description');
-  const client = getSupabaseClient();
-  const authRedirectUrl = new URL(`${import.meta.env.BASE_URL}admin/`, window.location.origin).toString();
-
-  async function showCurrentState(session: Session | null) {
-    if (!client) {
+  const editForm = required<HTMLFormElement>('[data-edit-form]');
+  const editSelect = required<HTMLSelectElement>('[data-edit-concept]');
+  const editStatus = required<HTMLElement>('[data-edit-status]');
+  type EditableRow = {
+    id: string; title: string; description: string; section: string; priority: number;
+    locale: string; category?: string; publication_status: string; updated_at?: string;
+    banner_path: string | null; pdf_path: string | null;
+  };
+  let editable: EditableRow[] = [];
+  const editorIdentity = { kind: 'content_editor' as const, name: 'עורך/ת תוכן' };
+  async function showCurrentState() {
+    if (!isFirebaseConfigured) {
       configuration.hidden = false;
+      authPanel.hidden = true;
       return;
     }
-    if (!session) {
-      authPanel.hidden = false;
-      approvalPanel.hidden = true;
-      workspace.hidden = true;
-      return;
-    }
-    const { data: profile, error: profileError } = await client
-      .from('profiles')
-      .select('identity_kind,approved')
-      .eq('id', session.user.id)
-      .maybeSingle();
-    if (profileError) throw profileError;
-    // "editor" remains accepted during the hosted role-migration window.
-    const authorized = Boolean(profile?.approved && ['content_editor', 'editor'].includes(profile.identity_kind));
-    authPanel.hidden = true;
-    approvalPanel.hidden = authorized;
+    const user = await anonymousUser();
+    const profile = await getDoc(doc(firestore(), 'profiles', user.uid));
+    const authorized = profile.data()?.identity_kind === 'content_editor' && profile.data()?.approved === true;
+    authPanel.hidden = authorized;
+    approvalPanel.hidden = true;
     workspace.hidden = !authorized;
-    if (authorized) await Promise.all([loadConceptList(), loadBannerConcepts()]);
+    if (authorized) await Promise.all([loadConceptList(), loadBannerConcepts(), loadEditable()]);
   }
 
-  async function loadConceptList() {
-    if (!client) return;
-    const list = required<HTMLElement>('[data-admin-concept-list]');
-    const { data, error } = await client
-      .from('concepts')
-      .select('id,title,section,publication_status,updated_at')
-      .order('updated_at', { ascending: false })
-      .limit(12);
-    if (error) {
-      list.textContent = 'לא ניתן לטעון את הרשימה.';
+  async function loadEditable() {
+    const previous = editSelect.value;
+    editable = (await getDocs(collection(firestore(), 'concepts'))).docs.map((record) => ({ ...record.data(), id: record.id } as EditableRow))
+      .sort((a, b) => a.locale.localeCompare(b.locale) || a.priority - b.priority);
+    editSelect.replaceChildren(new Option('— בחירת קונספט —', ''));
+    for (const row of editable) editSelect.add(new Option(`${row.locale.toUpperCase()} · ${row.title}`, row.id));
+    if (editable.some((row) => row.id === previous)) editSelect.value = previous;
+    fillEditable();
+  }
+
+  function fillEditable() {
+    const row = editable.find((item) => item.id === editSelect.value);
+    if (!row) { editForm.reset(); return; }
+    for (const key of ['title', 'description', 'section', 'locale', 'priority', 'category', 'publication_status'] as const) {
+      const control = editForm.elements.namedItem(key) as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
+      control.value = String(row[key] ?? (key === 'category' ? 'series' : ''));
+    }
+    (editForm.elements.namedItem('banner') as HTMLInputElement).value = '';
+    (editForm.elements.namedItem('pdf') as HTMLInputElement).value = '';
+    editStatus.textContent = '';
+  }
+  editSelect.addEventListener('change', fillEditable);
+
+  editForm.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const row = editable.find((item) => item.id === editSelect.value);
+    if (!row) return;
+    const form = new FormData(editForm);
+    const banner = form.get('banner') as File;
+    const pdf = form.get('pdf') as File;
+    const newBanner = banner?.size ? banner : null;
+    const newPdf = pdf?.size ? pdf : null;
+    const title = String(form.get('title') ?? '').trim();
+    const text = String(form.get('description') ?? '').trim();
+    const priority = Number(form.get('priority'));
+    if (!title || !text || text.length > 500 || !Number.isInteger(priority) || priority < 0 || priority > 9999) {
+      editStatus.textContent = 'יש להזין כותרת, תיאור עד 500 תווים וסדר תקין.';
       return;
     }
+    const button = editForm.querySelector<HTMLButtonElement>('button[type="submit"]')!;
+    button.disabled = true;
+    editStatus.textContent = 'שומר שינויים…';
+    const uploaded: string[] = [];
+    let committed = false;
+    let attemptedCommit = false;
+    let bannerPath: string | null = row.banner_path;
+    let pdfPath: string | null = row.pdf_path;
+    try {
+      await ensureReviewerSession(editorIdentity);
+      validateFiles(newBanner, newPdf);
+      const nextLocale = asLocale(form.get('locale'));
+      const neighbors = await getDocs(query(collection(firestore(), 'concepts'), where('locale', '==', nextLocale)));
+      if (neighbors.docs.some((record) => record.id !== row.id && conceptIdentity(nextLocale, record.data().title) === conceptIdentity(nextLocale, title))) {
+        throw new Error('קונספט בשם הזה כבר קיים בשפה שנבחרה.');
+      }
+      bannerPath = newBanner ? `${crypto.randomUUID()}/banner.png` : row.banner_path;
+      pdfPath = newPdf ? `${crypto.randomUUID()}/concept.pdf` : row.pdf_path;
+      if (newBanner && bannerPath) {
+        const path = `concept-banners/${bannerPath}`;
+        await uploadBytes(ref(storage(), path), newBanner, { contentType: 'image/png' });
+        uploaded.push(path);
+      }
+      if (newPdf && pdfPath) {
+        const path = `concept-pdfs/${pdfPath}`;
+        await uploadBytes(ref(storage(), path), newPdf, { contentType: 'application/pdf' });
+        uploaded.push(path);
+      }
+      attemptedCommit = true;
+      await updateConceptIfUnchanged(row.id, { updated_at: row.updated_at }, {
+        title, description: text, priority,
+        section: form.get('section') === 'library' ? 'library' : 'queue',
+        locale: nextLocale,
+        category: String(form.get('category')),
+        publication_status: form.get('publication_status') === 'published' ? 'published' : 'draft',
+        banner_path: bannerPath, pdf_path: pdfPath,
+      });
+      committed = true;
+      if (newBanner) rememberReplacedBanner(row.id, row.banner_path);
+      await Promise.all([loadEditable(), loadConceptList(), loadBannerConcepts()]);
+      editStatus.textContent = 'השינויים נשמרו. קבצים ישנים נשארו בארכיון.';
+    } catch (error) {
+      if (!committed && attemptedCommit) {
+        try {
+          const current = (await getDoc(doc(firestore(), 'concepts', row.id))).data();
+          if (current?.banner_path === bannerPath && current?.pdf_path === pdfPath) committed = true;
+        } catch { committed = true; } // uncertain state: never erase potentially referenced objects
+      }
+      if (committed && newBanner) rememberReplacedBanner(row.id, row.banner_path);
+      if (!committed) await Promise.allSettled(uploaded.map((path) => deleteObject(ref(storage(), path))));
+      editStatus.textContent = `השמירה נכשלה: ${error instanceof Error ? error.message : 'שגיאה לא ידועה.'}`;
+    } finally { button.disabled = false; }
+  });
+
+  async function loadConceptList() {
+    const list = required<HTMLElement>('[data-admin-concept-list]');
+    const data = (await getDocs(collection(firestore(), 'concepts'))).docs.map((item) => ({ ...item.data(), id: item.id } as EditableRow))
+      .sort((a, b) => String(b.updated_at ?? '').localeCompare(String(a.updated_at ?? ''))).slice(0, 12);
     list.replaceChildren();
-    for (const concept of data ?? []) {
+    for (const concept of data) {
       const item = document.createElement('article');
       item.className = 'admin-concept-row';
       const title = document.createElement('h3');
@@ -76,27 +160,16 @@ if (app) {
 
   required<HTMLFormElement>('[data-magic-link-form]').addEventListener('submit', async (event) => {
     event.preventDefault();
-    if (!client) return;
-    const form = event.currentTarget as HTMLFormElement;
-    const email = String(new FormData(form).get('email') ?? '');
-    authStatus.textContent = 'שולח קישור…';
-    const { error } = await client.auth.signInWithOtp({ email, options: { emailRedirectTo: authRedirectUrl } });
-    authStatus.textContent = error ? `השליחה נכשלה: ${error.message}` : 'הקישור נשלח. אפשר לעבור לתיבת הדואר.';
+    authStatus.textContent = 'פותח סביבת עריכה…';
+    try {
+      await ensureReviewerSession(editorIdentity);
+      await showCurrentState();
+    } catch (error) { authStatus.textContent = error instanceof Error ? error.message : 'הכניסה נכשלה.'; }
   });
-
-  if (client) {
-    client.auth.onAuthStateChange((_event, session) => {
-      window.setTimeout(() => {
-        showCurrentState(session).catch((error) => {
-          authPanel.hidden = false;
-          authStatus.textContent = error instanceof Error ? error.message : 'לא ניתן לבדוק את מצב הכניסה.';
-        });
-      }, 0);
-    });
-  }
-
+  // Leave editor mode without replacing the anonymous uid (and losing ownership of reviews).
   app.querySelectorAll<HTMLButtonElement>('[data-sign-out]').forEach((button) => button.addEventListener('click', async () => {
-    await client?.auth.signOut();
+    await ensureReviewerSession({ kind: 'advisor', name: 'יועץ/ת' });
+    localStorage.removeItem('concept-approval:identity');
     location.reload();
   }));
 
@@ -115,6 +188,8 @@ if (app) {
     banner: File | null;
     pdf: File | null;
     published: boolean;
+    sourceId?: string | null;
+    category?: string;
   };
 
   type ImportManifest = {
@@ -126,6 +201,8 @@ if (app) {
       description_draft?: string;
       priority?: number;
       locale?: string;
+      id?: string;
+      category_key?: string;
       pdf?: string;
       banner?: string;
     }>;
@@ -146,45 +223,58 @@ if (app) {
   }
 
   async function createConcept(draft: ConceptDraft) {
-    if (!client) throw new Error('Supabase אינו מחובר.');
+    await ensureReviewerSession(editorIdentity);
     if (!draft.title || !draft.description) throw new Error('כותרת ותיאור הם שדות חובה.');
     if (draft.description.length > 500) throw new Error('התיאור מוגבל ל־500 תווים.');
+    if (!Number.isInteger(draft.priority) || draft.priority < 0 || draft.priority > 9999) throw new Error('סדר התצוגה אינו תקין.');
+    if (draft.category && !['FLAGSHIP SERIES', 'series', 'film', 'film-short', 'film-long', 'digital', 'podcast'].includes(draft.category)) {
+      throw new Error('סוג הקונספט במניפסט אינו מוכר.');
+    }
     validateFiles(draft.banner, draft.pdf);
-
-    const id = crypto.randomUUID();
-    const bannerPath = draft.banner?.size ? `${id}/banner.png` : null;
-    const pdfPath = draft.pdf?.size ? `${id}/concept.pdf` : null;
-    const { error: insertError } = await client.from('concepts').insert({
-      id,
-      title: draft.title,
-      description: draft.description,
-      section: draft.section,
-      priority: draft.priority,
-      locale: draft.locale,
-      publication_status: 'draft',
-      banner_path: null,
-      pdf_path: null,
-    });
-    if (insertError) throw insertError;
-
-    const uploads = [];
-    if (bannerPath && draft.banner) uploads.push(client.storage.from('concept-banners').upload(bannerPath, draft.banner, { contentType: 'image/png', upsert: false }));
-    if (pdfPath && draft.pdf) uploads.push(client.storage.from('concept-pdfs').upload(pdfPath, draft.pdf, { contentType: 'application/pdf', upsert: false }));
-    const results = await Promise.all(uploads);
-    const uploadError = results.find(({ error }) => error)?.error;
-    if (uploadError) {
-      await client.from('concepts').delete().eq('id', id);
-      if (bannerPath) await client.storage.from('concept-banners').remove([bannerPath]);
-      if (pdfPath) await client.storage.from('concept-pdfs').remove([pdfPath]);
-      throw new Error(`העלאת הקובץ נכשלה, ולכן הקונספט לא נשמר: ${uploadError.message}`);
+    const matchingLocale = await getDocs(query(collection(firestore(), 'concepts'), where('locale', '==', draft.locale)));
+    if (matchingLocale.docs.some((record) => conceptIdentity(draft.locale, record.data().title) === conceptIdentity(draft.locale, draft.title))) {
+      throw new Error('קונספט בשם הזה כבר קיים בשפה שנבחרה.');
     }
 
-    const { error: finalizeError } = await client.from('concepts').update({
-      banner_path: bannerPath,
-      pdf_path: pdfPath,
-      publication_status: draft.published ? 'published' : 'draft',
-    }).eq('id', id);
-    if (finalizeError) throw finalizeError;
+    if (draft.sourceId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(draft.sourceId)) {
+      throw new Error('מזהה מקור במניפסט חייב להיות UUID תקין.');
+    }
+    const id = draft.sourceId ?? crypto.randomUUID();
+    if ((await getDoc(doc(firestore(), 'concepts', id))).exists()) throw new Error('מזהה המקור כבר קיים; אין לדרוס קונספט או היסטוריה.');
+    const bannerPath = draft.banner?.size ? `${id}/banner.png` : null;
+    const pdfPath = draft.pdf?.size ? `${id}/concept.pdf` : null;
+    const reference = doc(firestore(), 'concepts', id);
+    const now = new Date().toISOString();
+    const uploaded: string[] = [];
+    let writing = false;
+    try {
+      if (bannerPath && draft.banner) {
+        await uploadBytes(ref(storage(), `concept-banners/${bannerPath}`), draft.banner, { contentType: 'image/png' });
+        uploaded.push(`concept-banners/${bannerPath}`);
+      }
+      if (pdfPath && draft.pdf) {
+        await uploadBytes(ref(storage(), `concept-pdfs/${pdfPath}`), draft.pdf, { contentType: 'application/pdf' });
+        uploaded.push(`concept-pdfs/${pdfPath}`);
+      }
+      // Do not expose a half-uploaded draft, even to editors.
+      writing = true;
+      await setDoc(reference, {
+        id, title: draft.title, description: draft.description, section: draft.section,
+        priority: draft.priority, locale: draft.locale,
+        publication_status: draft.published ? 'published' : 'draft',
+        banner_path: bannerPath, pdf_path: pdfPath,
+        category: draft.category ?? 'series', reviews: [], concept_assessments: null,
+        created_at: now, updated_at: now, created_by: (await anonymousUser()).uid,
+      });
+    } catch (error) {
+      // A timed-out write may already have committed. Never delete its referenced files.
+      if (writing) {
+        try { if ((await getDoc(reference)).exists()) return; }
+        catch { throw new Error('מצב השמירה אינו ברור. אין למחוק את הקבצים; בדקו את הרשומה לפני ניסיון נוסף.', { cause: error }); }
+      }
+      await Promise.allSettled(uploaded.map((path) => deleteObject(ref(storage(), path))));
+      throw error;
+    }
   }
 
   function packagePath(file: File) {
@@ -198,7 +288,6 @@ if (app) {
 
   conceptForm.addEventListener('submit', async (event) => {
     event.preventDefault();
-    if (!client) return;
     const data = new FormData(conceptForm);
     const banner = data.get('banner') as File;
     const pdf = data.get('pdf') as File;
@@ -232,7 +321,6 @@ if (app) {
 
   bulkImportForm.addEventListener('submit', async (event) => {
     event.preventDefault();
-    if (!client) return;
     const files = Array.from(bulkFolder.files ?? []);
     const manifestFile = files.find((file) => packagePath(file).endsWith('/manifest.json') || packagePath(file) === 'manifest.json');
     if (!manifestFile) {
@@ -266,10 +354,9 @@ if (app) {
     try {
       const form = new FormData(bulkImportForm);
       const packageLocale = asLocale(form.get('locale') ?? manifest.locale);
-      const titles = items.map((item) => item.title as string);
-      const { data: existing, error: existingError } = await client.from('concepts').select('title,locale').in('title', titles);
-      if (existingError) throw existingError;
-      const taken = new Set((existing ?? []).map((concept) => conceptIdentity(concept.locale ?? 'he', concept.title)));
+
+      const existing = await getDocs(collection(firestore(), 'concepts'));
+      const taken = new Set(existing.docs.map((record) => conceptIdentity(record.data().locale ?? 'he', record.data().title)));
       const shouldPublish = Boolean(form.get('published'));
 
       for (const [index, item] of items.entries()) {
@@ -289,8 +376,11 @@ if (app) {
             banner: packageFile(files, item.banner as string),
             pdf: packageFile(files, item.pdf as string),
             published: shouldPublish,
+            sourceId: item.id,
+            category: item.category_key,
           });
           imported += 1;
+          taken.add(conceptIdentity(itemLocale, item.title as string));
         } catch (error) {
           failures.push(`${item.title}: ${error instanceof Error ? error.message : 'שגיאה לא ידועה'}`);
         }
@@ -309,25 +399,17 @@ if (app) {
   const publishDraftsButton = required<HTMLButtonElement>('[data-publish-drafts]');
   const publishDraftsStatus = required<HTMLElement>('[data-publish-drafts-status]');
   publishDraftsButton.addEventListener('click', async () => {
-    if (!client) return;
     publishDraftsButton.disabled = true;
     publishDraftsStatus.textContent = 'מאתר טיוטות לפרסום…';
     try {
-      const { data: drafts, error: draftsError } = await client
-        .from('concepts')
-        .select('id')
-        .eq('publication_status', 'draft');
-      if (draftsError) throw draftsError;
-      if (!drafts?.length) {
+      await ensureReviewerSession(editorIdentity);
+      const drafts = await getDocs(query(collection(firestore(), 'concepts'), where('publication_status', '==', 'draft')));
+      if (drafts.empty) {
         publishDraftsStatus.textContent = 'אין טיוטות לפרסום.';
         return;
       }
-      const { error } = await client
-        .from('concepts')
-        .update({ publication_status: 'published' })
-        .in('id', drafts.map((concept) => concept.id));
-      if (error) throw error;
-      publishDraftsStatus.textContent = `${drafts.length} קונספטים פורסמו לקוראים.`;
+      await Promise.all(drafts.docs.map((record) => updateDoc(record.ref, { publication_status: 'published', updated_at: new Date().toISOString() })));
+      publishDraftsStatus.textContent = `${drafts.size} קונספטים פורסמו לקוראים.`;
       await loadConceptList();
     } catch (error) {
       publishDraftsStatus.textContent = `הפרסום נכשל: ${error instanceof Error ? error.message : 'שגיאה לא ידועה.'}`;
@@ -424,18 +506,10 @@ if (app) {
   }
 
   async function loadBannerConcepts() {
-    if (!client) return;
-    const { data, error } = await client
-      .from('concepts')
-      .select('id,title,locale,banner_path,publication_status')
-      .order('locale', { ascending: true })
-      .order('priority', { ascending: true });
-    if (error) {
-      bannerStatus.textContent = `לא ניתן לטעון את רשימת הקונספטים: ${error.message}`;
-      return;
-    }
+    const data = (await getDocs(collection(firestore(), 'concepts'))).docs.map((record) => ({ id: record.id, ...record.data() } as BannerConcept & { priority: number }))
+      .sort((a, b) => String(a.locale).localeCompare(String(b.locale)) || a.priority - b.priority);
     const previous = bannerConceptSelect.value;
-    bannerConcepts = (data ?? []) as BannerConcept[];
+    bannerConcepts = data;
     bannerConceptSelect.replaceChildren(new Option('— בחירת קונספט —', ''));
     for (const concept of bannerConcepts) {
       const layout = bannerLayoutFromPath(concept.banner_path) === 'artwork' ? 'כותרת חיה' : 'כותרת צרובה';
@@ -475,6 +549,7 @@ if (app) {
     clearPending();
     const concept = selectedBannerConcept();
     bannerSourceInput.value = '';
+    releaseMediaUrls('concept-banners');
     currentBannerUrl = '';
     if (!concept) {
       bannerTitleInput.value = '';
@@ -492,14 +567,14 @@ if (app) {
       ? `הבאנר הנוכחי נקי מטקסט, והכותרת מצוירת עליו כטקסט חי · ${concept.banner_path}`
       : `הבאנר הנוכחי מכיל כותרת צרובה בתוך התמונה · ${concept.banner_path ?? 'אין באנר'}`;
     bannerRestoreButton.hidden = !replacedBanners()[concept.id];
-    if (!client || !concept.banner_path) {
+    if (!concept.banner_path) {
       bannerPreview.replaceChildren();
       return;
     }
     const token = previewToken;
-    const { data } = await client.storage.from('concept-banners').createSignedUrl(concept.banner_path, 60 * 10);
+    const url = await refreshMediaUrl('concept-banners', concept.banner_path);
     if (token !== previewToken) return;
-    currentBannerUrl = data?.signedUrl ?? '';
+    currentBannerUrl = url;
     if (currentBannerUrl) renderBannerPreview(currentBannerUrl, layout, bannerTitleInput.value);
   }
 
@@ -556,50 +631,39 @@ if (app) {
    * title overlay waits for the migration.
    */
   async function publishArtworkBanner(concept: BannerConcept, blob: Blob, title: string) {
-    if (!client) throw new Error('Supabase אינו מחובר.');
+    await ensureReviewerSession(editorIdentity);
     const version = crypto.randomUUID();
-    const upload = async (path: string) => {
-      const result = await client.storage.from('concept-banners')
-        .upload(path, blob, { contentType: BANNER_ARTWORK.outputType, upsert: false });
-      if (result.error) throw result.error;
-      return path;
-    };
-    const point = (path: string) => client.from('concepts')
-      .update({ banner_path: path, title })
-      .eq('id', concept.id)
-      .eq('banner_path', concept.banner_path)
-      .select('id,title,banner_path')
-      .maybeSingle();
-
-    let path = await upload(versionedArtworkBannerPath(version));
-    let { data, error } = await point(path);
-    if (error?.code === CHECK_VIOLATION) {
-      await client.storage.from('concept-banners').remove([path]);
-      path = await upload(constrainedBannerPathFor(version));
-      ({ data, error } = await point(path));
-    }
-    if (error) throw error;
-    if (!data) {
-      // The concept moved under us; the object just uploaded is ours alone to clean up.
-      await client.storage.from('concept-banners').remove([path]);
-      throw new Error('הבאנר של הקונספט השתנה בינתיים. יש לרענן ולנסות שוב.');
+    const path = versionedArtworkBannerPath(version);
+    const object = ref(storage(), `concept-banners/${path}`);
+    await uploadBytes(object, blob, { contentType: BANNER_ARTWORK.outputType });
+    try {
+      await updateConceptIfUnchanged(concept.id, { banner_path: concept.banner_path, title: concept.title }, { banner_path: path, title });
+    } catch (error) {
+      let current: string | undefined;
+      try { current = (await getDoc(doc(firestore(), 'concepts', concept.id))).data()?.banner_path; }
+      catch { throw new Error('מצב פרסום הבאנר אינו ברור. הקובץ נשמר; יש לבדוק את הקונספט לפני ניסיון נוסף.', { cause: error }); }
+      if (current !== path) { await deleteObject(object); throw error; }
     }
     rememberReplacedBanner(concept.id, concept.banner_path);
-    return { ...data, liveTitle: bannerLayoutFromPath(data.banner_path) === 'artwork' };
+    return { id: concept.id, title, banner_path: path, liveTitle: true };
+  }
+
+  async function updateConceptIfUnchanged(id: string, expected: Record<string, unknown>, changes: Record<string, unknown>) {
+    const reference = doc(firestore(), 'concepts', id);
+    await runTransaction(firestore(), async (tx) => {
+      const snapshot = await tx.get(reference);
+      if (!snapshot.exists() || Object.entries(expected).some(([key, value]) => snapshot.data()[key] !== value)) {
+        throw new Error('הקונספט השתנה בינתיים. יש לרענן כדי לא לדרוס עריכה אחרת.');
+      }
+      tx.update(reference, { ...changes, updated_at: new Date().toISOString() });
+    });
   }
 
   /** A title correction on a banner that is already title-free: the picture is not touched. */
   async function saveTitleOnly(concept: BannerConcept, title: string) {
-    if (!client) throw new Error('Supabase אינו מחובר.');
-    const { data, error } = await client.from('concepts')
-      .update({ title })
-      .eq('id', concept.id)
-      .eq('title', concept.title)
-      .select('id,title,banner_path')
-      .maybeSingle();
-    if (error) throw error;
-    if (!data) throw new Error('הכותרת השתנתה בינתיים. יש לרענן ולנסות שוב.');
-    return data;
+    await ensureReviewerSession(editorIdentity);
+    await updateConceptIfUnchanged(concept.id, { banner_path: concept.banner_path, title: concept.title }, { title });
+    return { id: concept.id, title, banner_path: concept.banner_path };
   }
 
   bannerConceptSelect.addEventListener('change', () => {
@@ -641,7 +705,6 @@ if (app) {
 
   bannerForm.addEventListener('submit', async (event) => {
     event.preventDefault();
-    if (!client) return;
     const concept = selectedBannerConcept();
     const pending = pendingSave;
     if (!concept || !pending) {
@@ -675,9 +738,7 @@ if (app) {
         const saved = await publishArtworkBanner(concept, pending.blob, title);
         concept.banner_path = saved.banner_path;
         concept.title = saved.title;
-        bannerStatus.textContent = saved.liveTitle
-          ? `נשמר ופורסם. הקונספט מצביע על ${saved.banner_path}, הכותרת מצוירת על הבאנר בחדר, והבאנר הקודם (${previousPath}) נשאר בארכיון.`
-          : `נשמר ופורסם ב־${saved.banner_path}, והבאנר הקודם (${previousPath}) נשאר בארכיון. עד שתופעל מיגרציית banner-artwork בבסיס הנתונים, החדר יציג את הכותרת מתחת לתמונה ולא עליה — הכפילות כבר לא קיימת בכל מקרה.`;
+        bannerStatus.textContent = `נשמר ופורסם. הקונספט מצביע על ${saved.banner_path}, הכותרת מצוירת על הבאנר בחדר, והבאנר הקודם (${previousPath}) נשאר בארכיון.`;
       }
       clearPending();
       await loadBannerConcepts();
@@ -692,7 +753,6 @@ if (app) {
   });
 
   bannerRestoreButton.addEventListener('click', async () => {
-    if (!client) return;
     const concept = selectedBannerConcept();
     if (!concept) return;
     // Only the pointer this browser recorded is offered. Guessing at a neighbouring object
@@ -705,16 +765,10 @@ if (app) {
     bannerRestoreButton.disabled = true;
     bannerStatus.textContent = 'מחזיר את הבאנר הקודם…';
     try {
-      const { data, error } = await client.from('concepts')
-        .update({ banner_path: original })
-        .eq('id', concept.id)
-        .eq('banner_path', concept.banner_path)
-        .select('id,banner_path')
-        .maybeSingle();
-      if (error) throw error;
-      if (!data) throw new Error('הבאנר השתנה בינתיים. יש לרענן לפני שחזור כדי לא לדרוס עריכה אחרת.');
-      concept.banner_path = data.banner_path;
-      bannerStatus.textContent = `הוחזר הבאנר הקודם: ${data.banner_path}`;
+      await ensureReviewerSession(editorIdentity);
+      await updateConceptIfUnchanged(concept.id, { banner_path: concept.banner_path }, { banner_path: original });
+      concept.banner_path = original;
+      bannerStatus.textContent = `הוחזר הבאנר הקודם: ${original}`;
       await loadBannerConcepts();
     } catch (error) {
       bannerStatus.textContent = `החזרה נכשלה: ${error instanceof Error ? error.message : 'שגיאה לא ידועה.'}`;
@@ -723,9 +777,10 @@ if (app) {
     }
   });
 
-  if (!isSupabaseConfigured) configuration.hidden = false;
-  else {
+  authStatus.textContent = 'בודק את מצב הכניסה…';
+  window.addEventListener('pagehide', () => { clearPending(); releaseMediaUrls(); });
+  void showCurrentState().catch((error) => {
     authPanel.hidden = false;
-    authStatus.textContent = 'בודק את מצב הכניסה…';
-  }
+    authStatus.textContent = error instanceof Error ? error.message : 'לא ניתן לבדוק את מצב הכניסה.';
+  });
 }
