@@ -12,6 +12,8 @@ test('real private snapshot: every document, link, note and 135 SHA-256s validat
   plan = await buildPlan();
   assert.deepEqual(plan.summary.counts, { concepts: 62, reviews: 59, concept_assessments: 17, legacy_profiles: 111, media: 135, bytes: 104901305, reviews_with_notes: 20 });
   assert.equal(plan.docs.length, 249);
+  assert.equal(plan.media.filter(m=>m.conceptId).length, 124);
+  assert.ok(plan.media.some(m=>m.conceptId && m.key.split('/')[1] !== m.conceptId));
   for (const d of plan.docs) assert.deepEqual(Object.fromEntries(Object.entries(documentFields(d.data)).map(([k,v])=>[k,decode(v)])), d.data);
   assert.equal(plan.docs.filter(d=>d.path.startsWith('concepts/')).flatMap(d=>d.data.reviews).length,59);
   const dry = await importRun([]);
@@ -80,8 +82,14 @@ test('Firestore commit uses exists:false and GCS upload uses generationMatch=0',
   assert.equal(payload.writes[0].update.fields.n.integerValue,'4');
   await client.putObject(plan.media[0]);
   assert.match(calls[1].url,/ifGenerationMatch=0/);
-  assert.equal(calls[1].opts.headers['Content-Length'],String(plan.media[0].bytes));
-  calls[1].opts.body.destroy();
+  assert.match(calls[1].url,/uploadType=multipart/);
+  const parts=[];
+  for await (const chunk of calls[1].opts.body) parts.push(chunk);
+  const multipart=Buffer.concat(parts);
+  assert.equal(calls[1].opts.headers['Content-Length'],String(multipart.length));
+  assert.ok(multipart.includes(Buffer.from(plan.media[0].key)));
+  if (plan.media[0].conceptId) assert.ok(multipart.includes(Buffer.from(`"conceptId":"${plan.media[0].conceptId}"`)));
+  assert.ok(multipart.includes(readFileSync(plan.media[0].file)));
 });
 
 test('GCS downloader streams bytes and SHA-256; HTTP error hides response body', async () => {
@@ -99,7 +107,7 @@ test('verification reads every target with no cloud writes and writes bounded re
   const temp=mkdtempSync(resolve('tests','.firebase-import-test-')); const report=resolve(temp,'report.json');
   let gets=0,downloads=0,lists=0;
   const fake={
-    listObjects:async()=>plan.media.map(m=>({name:m.key,size:String(m.bytes)})),
+    listObjects:async()=>plan.media.map(m=>({name:m.key,size:String(m.bytes),metadata:m.conceptId?{conceptId:m.conceptId}:{}})),
     listDocs:async(_project,collection)=>{lists++;return plan.docs.filter(d=>d.path.startsWith(`${collection}/`)).map(d=>({name:docName(PROJECT,d.path)}));},
     getDoc:async(_project,path)=>{gets++;const d=plan.docs.find(x=>x.path===path); return {name:docName(PROJECT,path),fields:documentFields(d.data)};},
     objectHash:async key=>{downloads++;const m=plan.media.find(x=>x.key===key);return {bytes:m.bytes,sha256:m.sha256};}

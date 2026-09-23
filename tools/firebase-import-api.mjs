@@ -4,6 +4,7 @@ import { createReadStream } from 'node:fs';
 import { writeFile, rename, open, mkdir } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { createHash } from 'node:crypto';
+import { Readable } from 'node:stream';
 import { BUCKET, PROJECT, invariant, decodeDocument, docName, documentFields, hashValue } from './firebase-import-core.mjs';
 
 const TRANSIENT = new Set([408, 429, 500, 502, 503, 504]);
@@ -59,6 +60,7 @@ export class Client {
     const obj = await this.getObject(media.key);
     if (!obj) return false;
     invariant(obj.name === media.key && Number(obj.size) === media.bytes, 'remote object identity/size');
+    if (media.conceptId) invariant(obj.metadata?.conceptId === media.conceptId, 'remote object concept permission metadata');
     const actual = await this.objectHash(media.key);
     invariant(actual.bytes === media.bytes && actual.sha256 === media.sha256, 'remote object hash');
     return true;
@@ -71,8 +73,22 @@ export class Client {
   }
   async putObject(media) {
     // Generation 0 is atomic create-only, including racing operators.
-    const url = `https://storage.googleapis.com/upload/storage/v1/b/${encodeURIComponent(BUCKET)}/o?uploadType=media&name=${encodeURIComponent(media.key)}&ifGenerationMatch=0`;
-    return this.request(url, { method: 'POST', body: createReadStream(media.file), headers: { 'Content-Type': media.key.startsWith('concept-pdfs/') ? 'application/pdf' : 'image/png', 'Content-Length': String(media.bytes) }, timeout: 180000 });
+    const url = `https://storage.googleapis.com/upload/storage/v1/b/${encodeURIComponent(BUCKET)}/o?uploadType=multipart&ifGenerationMatch=0`;
+    const mime = media.key.startsWith('concept-pdfs/') ? 'application/pdf' : 'image/png';
+    const boundary = `concept-upload-${createHash('sha256').update(media.key).digest('hex').slice(0,24)}`;
+    const metadata = { name: media.key, contentType: mime, metadata: media.conceptId ? { conceptId: media.conceptId } : {} };
+    const intro = Buffer.from(`--${boundary}
+\nContent-Type: application/json; charset=UTF-8
+\n
+\n${JSON.stringify(metadata)}
+\n--${boundary}
+\nContent-Type: ${mime}
+\n
+\n`);
+    const end = Buffer.from(`
+\n--${boundary}--`);
+    const body = Readable.from((async function* () { yield intro; yield* createReadStream(media.file); yield end; })());
+    return this.request(url, { method: 'POST', body, headers: { 'Content-Type': `multipart/related; boundary=${boundary}`, 'Content-Length': String(intro.length + media.bytes + end.length) }, timeout: 180000 });
   }
   async putDoc(project, doc) {
     const name = docName(project, doc.path);

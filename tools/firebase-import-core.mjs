@@ -138,20 +138,29 @@ export async function buildPlan(paths = DEFAULTS) {
     checks.set(key, { bytes: x.bytes, sha256: x.sha256 });
   }
   invariant(checks.size === 135, 'hash receipt coverage');
+  // Legacy media paths are not uniformly prefixed with the concept ID. Bind
+  // each currently referenced asset to its real concept for Storage rules.
+  const conceptForMedia = new Map();
+  for (const c of concepts.values()) for (const [field, bucket] of [['banner_path','concept-banners'],['pdf_path','concept-pdfs']]) {
+    if (!c[field]) continue;
+    const key = `${bucket}/${c[field]}`;
+    invariant(!conceptForMedia.has(key) || conceptForMedia.get(key) === c.id, 'shared media has ambiguous concept ownership');
+    conceptForMedia.set(key, c.id);
+  }
   const media = []; let total = 0;
   for (const x of inventory.files) {
     const key = `${x.bucket}/${x.path}`, check = checks.get(key);
     invariant(check && x.bytes === check.bytes && !media.some(m => m.key === key), 'inventory receipt bijection');
     const file = safeMedia(paths.mediaRoot, key), actual = await shaFile(file);
     invariant(actual.bytes === check.bytes && actual.sha256 === check.sha256, 'backup media hash/size');
-    media.push({ key, file, bytes: check.bytes, sha256: check.sha256 }); total += check.bytes;
+    media.push({ key, file, bytes: check.bytes, sha256: check.sha256, conceptId: conceptForMedia.get(key) ?? null }); total += check.bytes;
   }
   invariant(total === EXPECTED.bytes && media.length === checks.size, 'media totals');
   for (const c of concepts.values()) for (const [field, bucket] of [['banner_path','concept-banners'],['pdf_path','concept-pdfs']]) {
     if (c[field] !== null) invariant(media.some(m => m.key === `${bucket}/${c[field]}`), 'referenced concept media');
   }
   docs.sort((a,b) => a.path.localeCompare(b.path)); media.sort((a,b) => a.key.localeCompare(b.key));
-  return { docs, media, summary: { counts: { concepts: 62, reviews: 59, concept_assessments: 17, legacy_profiles: 111, media: media.length, bytes: total, reviews_with_notes: 20 }, documents_digest: hashValue(docs), media_digest: hashValue(media.map(({key,bytes,sha256})=>({key,bytes,sha256}))) } };
+  return { docs, media, summary: { counts: { concepts: 62, reviews: 59, concept_assessments: 17, legacy_profiles: 111, media: media.length, bytes: total, reviews_with_notes: 20 }, documents_digest: hashValue(docs), media_digest: hashValue(media.map(({key,bytes,sha256})=>({key,bytes,sha256}))), media_acl_digest: hashValue(media.map(({key,conceptId})=>({key,conceptId}))) } };
 }
 
 export function redactFailure(e) { return e instanceof Error && /^Validation failed:/.test(e.message) ? e.message : 'Operation failed; inspect credentials, network, or target state without logging sensitive response bodies.'; }

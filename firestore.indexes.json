@@ -1,4 +1,13 @@
 {
-  "indexes": [],
+  "indexes": [
+    {
+      "collectionGroup": "concepts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "locale", "order": "ASCENDING" },
+        { "fieldPath": "publication_status", "order": "ASCENDING" }
+      ]
+    }
+  ],
   "fieldOverrides": []
 }

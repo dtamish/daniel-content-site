@@ -106,12 +106,12 @@ if (app) {
       pdfPath = newPdf ? `${crypto.randomUUID()}/concept.pdf` : row.pdf_path;
       if (newBanner && bannerPath) {
         const path = `concept-banners/${bannerPath}`;
-        await uploadBytes(ref(storage(), path), newBanner, { contentType: 'image/png' });
+        await uploadBytes(ref(storage(), path), newBanner, { contentType: 'image/png', customMetadata: { conceptId: row.id } });
         uploaded.push(path);
       }
       if (newPdf && pdfPath) {
         const path = `concept-pdfs/${pdfPath}`;
-        await uploadBytes(ref(storage(), path), newPdf, { contentType: 'application/pdf' });
+        await uploadBytes(ref(storage(), path), newPdf, { contentType: 'application/pdf', customMetadata: { conceptId: row.id } });
         uploaded.push(path);
       }
       attemptedCommit = true;
@@ -249,11 +249,11 @@ if (app) {
     let writing = false;
     try {
       if (bannerPath && draft.banner) {
-        await uploadBytes(ref(storage(), `concept-banners/${bannerPath}`), draft.banner, { contentType: 'image/png' });
+        await uploadBytes(ref(storage(), `concept-banners/${bannerPath}`), draft.banner, { contentType: 'image/png', customMetadata: { conceptId: id } });
         uploaded.push(`concept-banners/${bannerPath}`);
       }
       if (pdfPath && draft.pdf) {
-        await uploadBytes(ref(storage(), `concept-pdfs/${pdfPath}`), draft.pdf, { contentType: 'application/pdf' });
+        await uploadBytes(ref(storage(), `concept-pdfs/${pdfPath}`), draft.pdf, { contentType: 'application/pdf', customMetadata: { conceptId: id } });
         uploaded.push(`concept-pdfs/${pdfPath}`);
       }
       // Do not expose a half-uploaded draft, even to editors.
@@ -635,7 +635,7 @@ if (app) {
     const version = crypto.randomUUID();
     const path = versionedArtworkBannerPath(version);
     const object = ref(storage(), `concept-banners/${path}`);
-    await uploadBytes(object, blob, { contentType: BANNER_ARTWORK.outputType });
+    await uploadBytes(object, blob, { contentType: BANNER_ARTWORK.outputType, customMetadata: { conceptId: concept.id } });
     try {
       await updateConceptIfUnchanged(concept.id, { banner_path: concept.banner_path, title: concept.title }, { banner_path: path, title });
     } catch (error) {

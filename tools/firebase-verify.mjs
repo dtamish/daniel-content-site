@@ -18,6 +18,7 @@ export async function run(args, injected = {}) {
     for (const obj of objectList) {
       const media = expectedObjects.get(obj.name);
       invariant(media && !seenObjects.has(obj.name) && Number(obj.size) === media.bytes, 'remote object inventory/size');
+      if (media.conceptId) invariant(obj.metadata?.conceptId === media.conceptId, 'remote object concept permission metadata');
       seenObjects.add(obj.name);
     }
     const byCollection = Map.groupBy(plan.docs, d => d.path.split('/')[0]);

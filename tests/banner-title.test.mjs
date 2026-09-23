@@ -183,7 +183,7 @@ test('a slow decode cannot land on the concept the editor moved to', () => {
 test('publishing a banner keeps every earlier version recoverable', () => {
   // Immutable: a new folder per save, and an upload that refuses to overwrite.
   assert.match(studio, /const version = crypto\.randomUUID\(\);/);
-  assert.match(studio, /uploadBytes\(object, blob, \{ contentType: BANNER_ARTWORK\.outputType \}\)/);
+  assert.match(studio, /uploadBytes\(object, blob, \{ contentType: BANNER_ARTWORK\.outputType, customMetadata: \{ conceptId: concept\.id \} \}\)/);
   assert.doesNotMatch(studio, /upsert: true/);
   // The pointer being replaced is recorded before it moves, and only that is offered back.
   assert.match(studio, /rememberReplacedBanner\(concept\.id, concept\.banner_path\)/);

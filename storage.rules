@@ -13,16 +13,24 @@ service firebase.storage {
       return firestore.exists(/databases/(default)/documents/concepts/$(conceptId))
         && firestore.get(/databases/(default)/documents/concepts/$(conceptId)).data.publication_status == 'published';
     }
-    match /concept-pdfs/{conceptId}/{remaining=**} {
-      allow read: if signedIn() && (editor() || published(conceptId));
+    function publishedAsset() {
+      return resource.metadata.conceptId is string
+        && published(resource.metadata.conceptId);
+    }
+    function identifiedUpload() {
+      return request.resource.metadata.conceptId is string
+        && request.resource.metadata.conceptId.matches('^[0-9a-f-]{36}$');
+    }
+    match /concept-pdfs/{assetId}/{remaining=**} {
+      allow read: if signedIn() && (editor() || publishedAsset());
       allow create: if editor() && request.resource.size <= 25 * 1024 * 1024
-        && request.resource.contentType == 'application/pdf';
+        && request.resource.contentType == 'application/pdf' && identifiedUpload();
       allow update, delete: if false;
     }
-    match /concept-banners/{conceptId}/{remaining=**} {
-      allow read: if signedIn() && (editor() || published(conceptId));
+    match /concept-banners/{assetId}/{remaining=**} {
+      allow read: if signedIn() && (editor() || publishedAsset());
       allow create: if editor() && request.resource.size <= 5 * 1024 * 1024
-        && request.resource.contentType == 'image/png';
+        && request.resource.contentType == 'image/png' && identifiedUpload();
       allow update, delete: if false;
     }
     match /{allPaths=**} { allow read, write: if false; }
